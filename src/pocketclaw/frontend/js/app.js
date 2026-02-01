@@ -30,6 +30,11 @@ function app() {
             includeSystemStatus: false
         },
 
+        // Skills state
+        showSkills: false,
+        skills: [],
+        skillsLoading: false,
+
         // File browser state
         filePath: '~',
         files: [],
@@ -136,6 +141,12 @@ function app() {
             socket.on('intention_toggled', (data) => this.handleIntentionToggled(data));
             socket.on('intention_deleted', (data) => this.handleIntentionDeleted(data));
             socket.on('intention_event', (data) => this.handleIntentionEvent(data));
+
+            // Skills handlers
+            socket.on('skills', (data) => this.handleSkills(data));
+            socket.on('skill_started', (data) => this.handleSkillStarted(data));
+            socket.on('skill_completed', (data) => this.handleSkillCompleted(data));
+            socket.on('skill_error', (data) => this.handleSkillError(data));
         },
 
         /**
@@ -335,17 +346,33 @@ function app() {
         sendMessage() {
             const text = this.inputText.trim();
             if (!text) return;
-            
+
+            // Check for skill command (starts with /)
+            if (text.startsWith('/')) {
+                const parts = text.slice(1).split(' ');
+                const skillName = parts[0];
+                const args = parts.slice(1).join(' ');
+
+                // Add user message
+                this.addMessage('user', text);
+                this.inputText = '';
+
+                // Run the skill
+                socket.send('run_skill', { name: skillName, args });
+                this.log(`Running skill: /${skillName} ${args}`, 'info');
+                return;
+            }
+
             // Add user message
             this.addMessage('user', text);
             this.inputText = '';
-            
+
             // Start streaming indicator
             this.startStreaming();
-            
+
             // Send to server
             socket.chat(text);
-            
+
             this.log(`You: ${text}`, 'info');
         },
 
@@ -656,6 +683,83 @@ function app() {
                 hour: '2-digit',
                 minute: '2-digit'
             });
+        },
+
+        // ==================== Skills ====================
+
+        /**
+         * Handle skills list
+         */
+        handleSkills(data) {
+            this.skills = data.skills || [];
+            this.skillsLoading = false;
+            this.$nextTick(() => {
+                if (window.refreshIcons) window.refreshIcons();
+            });
+        },
+
+        /**
+         * Handle skill started
+         */
+        handleSkillStarted(data) {
+            this.showToast(`Running: ${data.skill_name}`, 'info');
+            this.log(`Skill started: ${data.skill_name}`, 'info');
+        },
+
+        /**
+         * Handle skill completed
+         */
+        handleSkillCompleted(data) {
+            this.log(`Skill completed: ${data.skill_name}`, 'success');
+        },
+
+        /**
+         * Handle skill error
+         */
+        handleSkillError(data) {
+            this.showToast(`Skill error: ${data.error}`, 'error');
+            this.log(`Skill error: ${data.error}`, 'error');
+        },
+
+        /**
+         * Open skills panel
+         */
+        openSkills() {
+            this.showSkills = true;
+            this.skillsLoading = true;
+            socket.send('get_skills');
+
+            this.$nextTick(() => {
+                if (window.refreshIcons) window.refreshIcons();
+            });
+        },
+
+        /**
+         * Run a skill
+         */
+        runSkill(name, args = '') {
+            this.showSkills = false;
+            socket.send('run_skill', { name, args });
+            this.log(`Running skill: ${name} ${args}`, 'info');
+        },
+
+        /**
+         * Check if input is a skill command and run it
+         */
+        checkSkillCommand(text) {
+            if (text.startsWith('/')) {
+                const parts = text.slice(1).split(' ');
+                const skillName = parts[0];
+                const args = parts.slice(1).join(' ');
+
+                // Check if skill exists
+                const skill = this.skills.find(s => s.name === skillName);
+                if (skill) {
+                    this.runSkill(skillName, args);
+                    return true;
+                }
+            }
+            return false;
         },
 
         /**

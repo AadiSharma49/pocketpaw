@@ -19,6 +19,7 @@ from pocketclaw.llm.router import LLMRouter
 from pocketclaw.agents.router import AgentRouter
 from pocketclaw.scheduler import get_scheduler
 from pocketclaw.daemon import get_daemon
+from pocketclaw.skills import get_skill_loader, SkillExecutor
 
 logger = logging.getLogger(__name__)
 
@@ -371,6 +372,51 @@ async def websocket_endpoint(websocket: WebSocket):
                         "type": "error",
                         "content": "Intention not found"
                     })
+
+            # ==================== Skills API ====================
+
+            elif action == "get_skills":
+                loader = get_skill_loader()
+                loader.reload()  # Refresh to catch new installs
+                skills = [
+                    {
+                        "name": s.name,
+                        "description": s.description,
+                        "argument_hint": s.argument_hint,
+                    }
+                    for s in loader.get_invocable()
+                ]
+                await websocket.send_json({
+                    "type": "skills",
+                    "skills": skills
+                })
+
+            elif action == "run_skill":
+                skill_name = data.get("name", "")
+                skill_args = data.get("args", "")
+
+                loader = get_skill_loader()
+                skill = loader.get(skill_name)
+
+                if not skill:
+                    await websocket.send_json({
+                        "type": "error",
+                        "content": f"Skill not found: {skill_name}"
+                    })
+                else:
+                    await websocket.send_json({
+                        "type": "notification",
+                        "content": f"🎯 Running skill: {skill_name}"
+                    })
+
+                    # Execute skill through agent
+                    executor = SkillExecutor(settings)
+                    await websocket.send_json({"type": "stream_start"})
+                    try:
+                        async for chunk in executor.execute_skill(skill, skill_args):
+                            await websocket.send_json(chunk)
+                    finally:
+                        await websocket.send_json({"type": "stream_end"})
 
     except WebSocketDisconnect:
         logger.info("WebSocket client disconnected")

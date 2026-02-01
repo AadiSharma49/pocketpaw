@@ -79,6 +79,15 @@
             x-text="intentions.filter(i => i.enabled).length"
           ></span>
         </button>
+        <button class="nav-item flex items-center gap-3" @click="openSkills()">
+          <i data-lucide="wand-2" class="w-5 h-5"></i>
+          <span>Skills</span>
+          <span
+            x-show="skills.length > 0"
+            class="ml-auto bg-warning/20 text-warning text-xs px-2 py-0.5 rounded-full"
+            x-text="skills.length"
+          ></span>
+        </button>
         <button class="nav-item danger flex items-center gap-3" @click="runTool('panic')">
           <i data-lucide="octagon-x" class="w-5 h-5"></i>
           <span>Panic</span>
@@ -602,6 +611,73 @@
                     <i data-lucide="target" class="w-8 h-8"></i>
                     <span>No intentions set</span>
                     <span class="text-xs">Create one above to make PocketPaw proactive</span>
+                  </div>
+                </template>
+              </div>
+            </template>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Skills Modal -->
+    <div
+      class="modal-overlay"
+      x-show="showSkills"
+      x-transition.opacity
+      @click.self="showSkills = false"
+    >
+      <div class="modal modal-lg" @click.stop>
+        <div class="modal-header">
+          <h2>Skills</h2>
+          <button class="close-btn" @click="showSkills = false"><i data-lucide="x" class="w-5 h-5"></i></button>
+        </div>
+        <div class="modal-body">
+          <div class="flex flex-col gap-4">
+            <!-- Info -->
+            <p class="text-sm text-white/60">
+              Skills extend PocketPaw with specialized capabilities. Use <code class="text-accent">/skill-name</code> in chat to run a skill.
+              Install more from <a href="https://skills.sh" target="_blank" class="text-accent hover:underline">skills.sh</a>
+            </p>
+
+            <!-- Loading State -->
+            <template x-if="skillsLoading && skills.length === 0">
+              <div class="p-8 text-center text-white/60 flex flex-col items-center gap-2">
+                <i data-lucide="loader-2" class="w-6 h-6 animate-spin"></i>
+                <span>Loading skills...</span>
+              </div>
+            </template>
+
+            <!-- Skills List -->
+            <template x-if="!skillsLoading || skills.length > 0">
+              <div class="skill-list">
+                <template x-for="skill in skills" :key="skill.name">
+                  <div class="skill-item">
+                    <div class="flex items-start gap-3">
+                      <i data-lucide="wand-2" class="w-5 h-5 text-warning mt-0.5 flex-shrink-0"></i>
+                      <div class="flex-1 min-w-0">
+                        <p class="font-medium">
+                          <span class="text-accent">/</span><span x-text="skill.name"></span>
+                          <span x-show="skill.argument_hint" class="text-white/30 text-sm ml-1" x-text="skill.argument_hint"></span>
+                        </p>
+                        <p class="text-xs text-white/50 line-clamp-2" x-text="skill.description"></p>
+                      </div>
+                      <button
+                        class="btn-sm flex-shrink-0"
+                        @click="runSkill(skill.name); showSkills = false;"
+                      >
+                        Run
+                      </button>
+                    </div>
+                  </div>
+                </template>
+
+                <!-- Empty State -->
+                <template x-if="skills.length === 0">
+                  <div class="p-8 text-center text-white/40 flex flex-col items-center gap-2">
+                    <i data-lucide="wand-2" class="w-8 h-8"></i>
+                    <span>No skills installed</span>
+                    <span class="text-xs">Install skills with: <code class="text-accent">npx skills add owner/repo</code></span>
                   </div>
                 </template>
               </div>

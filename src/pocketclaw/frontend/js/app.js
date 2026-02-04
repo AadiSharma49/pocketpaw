@@ -3,6 +3,10 @@
  * Alpine.js component for the dashboard
  *
  * Changes (2026-02-04):
+ * - Fixed Memory UI: Added memoryLoading, memorySearch, memoryStats state
+ * - Added filteredMemories getter for memory search/display
+ * - Added getMemoryTypeClass(), formatDate(), deleteMemory() methods
+ * - Added updateMemoryStats() to compute memory statistics
  * - Fixed: Don't log streaming chunks to terminal (prevents word-by-word flood)
  * - Added Telegram setup in "Take Paw With You" modal
  * - Added remoteTab state for QR/Telegram tabs
@@ -71,6 +75,9 @@ function app() {
         memoryTab: 'session',
         sessionMemory: [],
         longTermMemory: [],
+        memoryLoading: false,
+        memorySearch: '',
+        memoryStats: { total_memories: 0, active_context: 0, archived: 0, user_interactions: 0 },
         
         showAudit: false,
         auditLoading: false,
@@ -1077,6 +1084,7 @@ function app() {
 
         openMemory() {
             this.showMemory = true;
+            this.memoryLoading = true;
             this.loadSessionMemory();
             this.loadLongTermMemory();
         },
@@ -1087,6 +1095,7 @@ function app() {
                 .then(r => r.json())
                 .then(data => {
                     this.sessionMemory = data;
+                    this.updateMemoryStats();
                 });
         },
 
@@ -1095,7 +1104,78 @@ function app() {
                 .then(r => r.json())
                 .then(data => {
                     this.longTermMemory = data;
+                    this.updateMemoryStats();
+                    this.memoryLoading = false;
+                })
+                .catch(e => {
+                    console.error('Failed to load memories:', e);
+                    this.memoryLoading = false;
                 });
+        },
+
+        updateMemoryStats() {
+            this.memoryStats = {
+                total_memories: this.longTermMemory.length + this.sessionMemory.length,
+                active_context: this.sessionMemory.length,
+                archived: 0,  // Could track archived memories separately
+                user_interactions: this.sessionMemory.filter(m => m.role === 'user').length
+            };
+        },
+
+        /**
+         * Get filtered memories based on search query
+         */
+        get filteredMemories() {
+            const search = this.memorySearch.toLowerCase().trim();
+            const allMemories = [
+                ...this.longTermMemory.map(m => ({ ...m, type: 'long_term', id: m.timestamp })),
+                ...this.sessionMemory.map((m, i) => ({ ...m, type: 'session', id: `session-${i}`, created_at: new Date().toISOString() }))
+            ];
+
+            if (!search) return allMemories;
+
+            return allMemories.filter(m =>
+                m.content?.toLowerCase().includes(search) ||
+                m.tags?.some(t => t.toLowerCase().includes(search))
+            );
+        },
+
+        /**
+         * Get CSS class for memory type badge
+         */
+        getMemoryTypeClass(type) {
+            const classes = {
+                'long_term': 'bg-purple-500/20 text-purple-400 border-purple-500/30',
+                'session': 'bg-blue-500/20 text-blue-400 border-blue-500/30',
+                'daily': 'bg-green-500/20 text-green-400 border-green-500/30'
+            };
+            return classes[type] || 'bg-gray-500/20 text-gray-400 border-gray-500/30';
+        },
+
+        /**
+         * Format date for display
+         */
+        formatDate(dateStr) {
+            if (!dateStr) return '';
+            try {
+                const date = new Date(dateStr);
+                return date.toLocaleDateString('en-US', {
+                    month: 'short',
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                });
+            } catch (e) {
+                return dateStr;
+            }
+        },
+
+        /**
+         * Delete a memory (placeholder - needs backend endpoint)
+         */
+        deleteMemory(id) {
+            // TODO: Add backend endpoint for memory deletion
+            this.showToast('Memory deletion not yet implemented', 'info');
         },
 
         openAudit() {

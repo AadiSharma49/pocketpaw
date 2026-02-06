@@ -35,11 +35,14 @@ def find_available_port(start_port: int, max_attempts: int = 10) -> int:
         port = start_port + offset
         try:
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-                s.bind(('127.0.0.1', port))
+                s.bind(("127.0.0.1", port))
                 return port
         except OSError:
             continue
-    raise OSError(f"Could not find available port in range {start_port}-{start_port + max_attempts}")
+    raise OSError(
+        f"Could not find available port in range {start_port}-{start_port + max_attempts}"
+    )
+
 
 logger = logging.getLogger(__name__)
 
@@ -55,7 +58,7 @@ def generate_qr_svg(deep_link: str) -> str:
     qr = qrcode.QRCode(version=1, box_size=10, border=2)
     qr.add_data(deep_link)
     qr.make(fit=True)
-    
+
     # Generate as PNG and convert to base64
     img = qr.make_image(fill_color="black", back_color="white")
     buffer = BytesIO()
@@ -67,10 +70,10 @@ def generate_qr_svg(deep_link: str) -> str:
 async def _handle_pairing_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /start <secret> during pairing."""
     global _settings, _pairing_complete
-    
+
     if not update.message or not update.effective_user:
         return
-        
+
     text = update.message.text
     if not text:
         return
@@ -79,34 +82,34 @@ async def _handle_pairing_start(update: Update, context: ContextTypes.DEFAULT_TY
     # Format: /start <secret>
     # Note: Telegram sends "/start" or "/start <payload>"
     parts = text.split()
-    
+
     if len(parts) < 2:
         await update.message.reply_text(
             "⏳ Waiting for pairing... Please scan the QR code to start."
         )
         return
-        
+
     secret = parts[1]
-    
+
     if secret != _session_secret:
         await update.message.reply_text("❌ Invalid session token. Please refresh the setup page.")
         return
-        
+
     # Success!
     user_id = update.effective_user.id
     username = update.effective_user.username
-    
+
     if _settings:
         _settings.allowed_user_id = user_id
         _settings.save()
-        
+
     logger.info(f"✅ Paired with user: {username} ({user_id})")
-    
+
     await update.message.reply_text(
         "🎉 **Connected!**\n\nPocketPaw is now paired with this device.\nYou can close the browser window now.",
-        parse_mode="Markdown"
+        parse_mode="Markdown",
     )
-    
+
     _pairing_complete.set()
 
 
@@ -115,9 +118,9 @@ def create_app(settings: Settings) -> FastAPI:
     global _session_secret, _settings
     _settings = settings
     _session_secret = secrets.token_urlsafe(32)
-    
+
     app = FastAPI(title="PocketPaw Setup")
-    
+
     @app.get("/", response_class=HTMLResponse)
     async def setup_page():
         """Render the setup page."""
@@ -331,57 +334,57 @@ def create_app(settings: Settings) -> FastAPI:
 </body>
 </html>
 """
-    
+
     @app.post("/setup")
     async def setup(
         bot_token: str = Form(...),
         openai_key: Optional[str] = Form(None),
-        anthropic_key: Optional[str] = Form(None)
+        anthropic_key: Optional[str] = Form(None),
     ):
         """Handle setup form submission."""
         global _settings, _temp_bot_app
-        
+
         # Save the bot token
         _settings.telegram_bot_token = bot_token
         if openai_key:
             _settings.openai_api_key = openai_key
         if anthropic_key:
             _settings.anthropic_api_key = anthropic_key
-        
+
         try:
             # 1. Initialize temporary bot
             builder = Application.builder().token(bot_token)
             app = builder.build()
-            
+
             # 2. Verify token and get username
             bot_user = await app.bot.get_me()
             username = bot_user.username
-            
+
             # 3. Generate Deep Link
             # Format: https://t.me/<username>?start=<secret>
             deep_link = f"https://t.me/{username}?start={_session_secret}"
             qr_data = generate_qr_svg(deep_link)
-            
+
             # 4. Start Listening for /start <secret>
             app.add_handler(CommandHandler("start", _handle_pairing_start))
-            
+
             await app.initialize()
             await app.start()
             await app.updater.start_polling(drop_pending_updates=True)
-            
+
             _temp_bot_app = app
-            
+
             return {"qr_url": qr_data, "session_secret": _session_secret}
-            
+
         except Exception as e:
             logger.error(f"Setup failed: {e}")
             return {"error": f"Failed to connect to Telegram: {str(e)}"}
-    
+
     @app.get("/status")
     async def status():
         """Check pairing status."""
         return {"paired": _pairing_complete.is_set()}
-    
+
     @app.post("/complete")
     async def complete(user_id: int):
         """Called internally when pairing is complete."""
@@ -390,7 +393,7 @@ def create_app(settings: Settings) -> FastAPI:
         _settings.save()
         _pairing_complete.set()
         return {"ok": True}
-    
+
     return app
 
 
@@ -411,24 +414,19 @@ async def run_pairing_server(settings: Settings) -> int:
     if port != settings.web_port:
         logger.info(f"Port {settings.web_port} busy, using port {port} instead")
 
-    config = uvicorn.Config(
-        app,
-        host=settings.web_host,
-        port=port,
-        log_level="warning"
-    )
+    config = uvicorn.Config(app, host=settings.web_host, port=port, log_level="warning")
     server = uvicorn.Server(config)
-    
+
     # Run server in background
     server_task = asyncio.create_task(server.serve())
-    
+
     try:
         # Wait for pairing to complete
         await _pairing_complete.wait()
-        
+
         # Give a moment for the success response to return
         await asyncio.sleep(1)
-        
+
     finally:
         # Shutdown temporary bot
         global _temp_bot_app

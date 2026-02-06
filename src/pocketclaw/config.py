@@ -83,6 +83,48 @@ class Settings(BaseSettings):
         default_factory=list, description="Explicit tool deny list (highest priority)"
     )
 
+    # Discord
+    discord_bot_token: str | None = Field(default=None, description="Discord bot token")
+    discord_allowed_guild_ids: list[int] = Field(
+        default_factory=list, description="Discord guild IDs allowed to use the bot"
+    )
+    discord_allowed_user_ids: list[int] = Field(
+        default_factory=list, description="Discord user IDs allowed to use the bot"
+    )
+
+    # Slack
+    slack_bot_token: str | None = Field(
+        default=None, description="Slack Bot OAuth token (xoxb-...)"
+    )
+    slack_app_token: str | None = Field(
+        default=None, description="Slack App-Level token for Socket Mode (xapp-...)"
+    )
+    slack_allowed_channel_ids: list[str] = Field(
+        default_factory=list, description="Slack channel IDs allowed to use the bot"
+    )
+
+    # WhatsApp
+    whatsapp_mode: str = Field(
+        default="personal",
+        description="WhatsApp mode: 'personal' (QR scan via neonize) or 'business' (Cloud API)",
+    )
+    whatsapp_neonize_db: str = Field(
+        default="",
+        description="Path to neonize SQLite credential store",
+    )
+    whatsapp_access_token: str | None = Field(
+        default=None, description="WhatsApp Business Cloud API access token"
+    )
+    whatsapp_phone_number_id: str | None = Field(
+        default=None, description="WhatsApp Business phone number ID"
+    )
+    whatsapp_verify_token: str | None = Field(
+        default=None, description="WhatsApp webhook verification token"
+    )
+    whatsapp_allowed_phone_numbers: list[str] = Field(
+        default_factory=list, description="WhatsApp phone numbers allowed to use the bot"
+    )
+
     # Security
     bypass_permissions: bool = Field(
         default=False, description="Skip permission prompts for agent actions (use with caution)"
@@ -123,6 +165,27 @@ class Settings(BaseSettings):
             "openai_model": self.openai_model,
             "anthropic_api_key": self.anthropic_api_key or existing.get("anthropic_api_key"),
             "anthropic_model": self.anthropic_model,
+            # Discord
+            "discord_bot_token": (self.discord_bot_token or existing.get("discord_bot_token")),
+            "discord_allowed_guild_ids": self.discord_allowed_guild_ids,
+            "discord_allowed_user_ids": self.discord_allowed_user_ids,
+            # Slack
+            "slack_bot_token": self.slack_bot_token or existing.get("slack_bot_token"),
+            "slack_app_token": self.slack_app_token or existing.get("slack_app_token"),
+            "slack_allowed_channel_ids": self.slack_allowed_channel_ids,
+            # WhatsApp
+            "whatsapp_mode": self.whatsapp_mode,
+            "whatsapp_neonize_db": self.whatsapp_neonize_db,
+            "whatsapp_access_token": (
+                self.whatsapp_access_token or existing.get("whatsapp_access_token")
+            ),
+            "whatsapp_phone_number_id": (
+                self.whatsapp_phone_number_id or existing.get("whatsapp_phone_number_id")
+            ),
+            "whatsapp_verify_token": (
+                self.whatsapp_verify_token or existing.get("whatsapp_verify_token")
+            ),
+            "whatsapp_allowed_phone_numbers": self.whatsapp_allowed_phone_numbers,
         }
         config_path.write_text(json.dumps(data, indent=2))
 

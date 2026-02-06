@@ -3,6 +3,9 @@
 Lightweight FastAPI server that serves the frontend and handles WebSocket communication.
 
 Changes:
+  - 2026-02-06: Channel config REST API (GET /api/channels/status, POST save/toggle).
+  - 2026-02-06: Refactored adapter storage to _channel_adapters dict; auto-start all configured.
+  - 2026-02-06: Auto-start Discord/WhatsApp adapters alongside dashboard; WhatsApp webhook routes.
   - 2026-02-05: Added Mission Control API router at /api/mission-control/*.
   - 2026-02-04: Added Telegram setup API endpoints (/api/telegram/status, /api/telegram/setup, /api/telegram/pairing-status).
   - 2026-02-03: Cleaned up duplicate imports, fixed duplicate save() calls.
@@ -45,6 +48,9 @@ ws_adapter = WebSocketAdapter()
 agent_loop = AgentLoop()
 # Retain active_connections for legacy broadcasts until fully migrated
 active_connections: list[WebSocket] = []
+
+# Channel adapters (auto-started when configured, keyed by channel name)
+_channel_adapters: dict[str, object] = {}
 
 # Get frontend directory
 FRONTEND_DIR = Path(__file__).parent / "frontend"
@@ -97,6 +103,92 @@ async def broadcast_intention(intention_id: str, chunk: dict):
                 active_connections.remove(ws)
 
 
+async def _start_channel_adapter(channel: str, settings: Settings | None = None) -> bool:
+    """Start a single channel adapter. Returns True on success."""
+    if settings is None:
+        settings = Settings.load()
+    bus = get_message_bus()
+
+    if channel == "discord":
+        if not settings.discord_bot_token:
+            return False
+        from pocketclaw.bus.adapters.discord_adapter import DiscordAdapter
+
+        adapter = DiscordAdapter(
+            token=settings.discord_bot_token,
+            allowed_guild_ids=settings.discord_allowed_guild_ids,
+            allowed_user_ids=settings.discord_allowed_user_ids,
+        )
+        await adapter.start(bus)
+        _channel_adapters["discord"] = adapter
+        return True
+
+    if channel == "slack":
+        if not settings.slack_bot_token or not settings.slack_app_token:
+            return False
+        from pocketclaw.bus.adapters.slack_adapter import SlackAdapter
+
+        adapter = SlackAdapter(
+            bot_token=settings.slack_bot_token,
+            app_token=settings.slack_app_token,
+            allowed_channel_ids=settings.slack_allowed_channel_ids,
+        )
+        await adapter.start(bus)
+        _channel_adapters["slack"] = adapter
+        return True
+
+    if channel == "whatsapp":
+        mode = settings.whatsapp_mode
+
+        if mode == "personal":
+            from pocketclaw.bus.adapters.neonize_adapter import NeonizeAdapter
+
+            db_path = settings.whatsapp_neonize_db or None
+            adapter = NeonizeAdapter(db_path=db_path)
+            await adapter.start(bus)
+            _channel_adapters["whatsapp"] = adapter
+            return True
+        else:
+            # Business mode (Cloud API)
+            if not settings.whatsapp_access_token or not settings.whatsapp_phone_number_id:
+                return False
+            from pocketclaw.bus.adapters.whatsapp_adapter import WhatsAppAdapter
+
+            adapter = WhatsAppAdapter(
+                access_token=settings.whatsapp_access_token,
+                phone_number_id=settings.whatsapp_phone_number_id,
+                verify_token=settings.whatsapp_verify_token or "",
+                allowed_phone_numbers=settings.whatsapp_allowed_phone_numbers,
+            )
+            await adapter.start(bus)
+            _channel_adapters["whatsapp"] = adapter
+            return True
+
+    if channel == "telegram":
+        if not settings.telegram_bot_token:
+            return False
+        from pocketclaw.bus.adapters.telegram_adapter import TelegramAdapter
+
+        adapter = TelegramAdapter(
+            token=settings.telegram_bot_token,
+            allowed_user_id=settings.allowed_user_id,
+        )
+        await adapter.start(bus)
+        _channel_adapters["telegram"] = adapter
+        return True
+
+    return False
+
+
+async def _stop_channel_adapter(channel: str) -> bool:
+    """Stop a single channel adapter. Returns True if it was running."""
+    adapter = _channel_adapters.pop(channel, None)
+    if adapter is None:
+        return False
+    await adapter.stop()
+    return True
+
+
 @app.on_event("startup")
 async def startup_event():
     """Start services on app startup."""
@@ -106,7 +198,16 @@ async def startup_event():
 
     # Start Agent Loop
     asyncio.create_task(agent_loop.start())
-    logger.info("🧠 Agent Loop started (Nanobot Architecture)")
+    logger.info("Agent Loop started (Nanobot Architecture)")
+
+    # Auto-start all configured channel adapters
+    settings = Settings.load()
+    for channel in ("discord", "slack", "whatsapp", "telegram"):
+        try:
+            if await _start_channel_adapter(channel, settings):
+                logger.info(f"{channel.title()} adapter auto-started alongside dashboard")
+        except Exception as e:
+            logger.warning(f"Failed to auto-start {channel} adapter: {e}")
 
     # Start reminder scheduler
     scheduler = get_scheduler()
@@ -124,6 +225,13 @@ async def shutdown_event():
     await agent_loop.stop()
     await ws_adapter.stop()
 
+    # Stop all channel adapters
+    for channel in list(_channel_adapters):
+        try:
+            await _stop_channel_adapter(channel)
+        except Exception as e:
+            logger.warning(f"Error stopping {channel} adapter: {e}")
+
     # Stop proactive daemon
     daemon = get_daemon()
     daemon.stop()
@@ -131,6 +239,183 @@ async def shutdown_event():
     # Stop reminder scheduler
     scheduler = get_scheduler()
     scheduler.stop()
+
+
+# ==================== WhatsApp Webhook Routes ====================
+
+
+@app.get("/webhook/whatsapp")
+async def whatsapp_verify(
+    hub_mode: str | None = Query(None, alias="hub.mode"),
+    hub_token: str | None = Query(None, alias="hub.verify_token"),
+    hub_challenge: str | None = Query(None, alias="hub.challenge"),
+):
+    """Meta webhook verification for WhatsApp."""
+    from fastapi.responses import PlainTextResponse
+
+    wa = _channel_adapters.get("whatsapp")
+    if wa is None:
+        return PlainTextResponse("Not configured", status_code=503)
+    result = wa.handle_webhook_verify(hub_mode, hub_token, hub_challenge)
+    if result:
+        return PlainTextResponse(result)
+    return PlainTextResponse("Forbidden", status_code=403)
+
+
+@app.post("/webhook/whatsapp")
+async def whatsapp_incoming(request: Request):
+    """Incoming WhatsApp messages via webhook."""
+    wa = _channel_adapters.get("whatsapp")
+    if wa is None:
+        return {"status": "not configured"}
+    payload = await request.json()
+    await wa.handle_webhook_message(payload)
+    return {"status": "ok"}
+
+
+@app.get("/api/whatsapp/qr")
+async def get_whatsapp_qr():
+    """Get current WhatsApp QR code for neonize pairing."""
+    adapter = _channel_adapters.get("whatsapp")
+    if adapter is None or not hasattr(adapter, "_qr_data"):
+        return {"qr": None, "connected": False}
+    return {
+        "qr": getattr(adapter, "_qr_data", None),
+        "connected": getattr(adapter, "_connected", False),
+    }
+
+
+# ==================== Channel Configuration API ====================
+
+# Maps channel config keys from the frontend to Settings field names
+_CHANNEL_CONFIG_KEYS: dict[str, dict[str, str]] = {
+    "discord": {
+        "bot_token": "discord_bot_token",
+        "allowed_guild_ids": "discord_allowed_guild_ids",
+        "allowed_user_ids": "discord_allowed_user_ids",
+    },
+    "slack": {
+        "bot_token": "slack_bot_token",
+        "app_token": "slack_app_token",
+        "allowed_channel_ids": "slack_allowed_channel_ids",
+    },
+    "whatsapp": {
+        "mode": "whatsapp_mode",
+        "neonize_db": "whatsapp_neonize_db",
+        "access_token": "whatsapp_access_token",
+        "phone_number_id": "whatsapp_phone_number_id",
+        "verify_token": "whatsapp_verify_token",
+        "allowed_phone_numbers": "whatsapp_allowed_phone_numbers",
+    },
+    "telegram": {
+        "bot_token": "telegram_bot_token",
+        "allowed_user_id": "allowed_user_id",
+    },
+}
+
+# Required fields per channel (at least these must be set to start the adapter)
+_CHANNEL_REQUIRED: dict[str, list[str]] = {
+    "discord": ["discord_bot_token"],
+    "slack": ["slack_bot_token", "slack_app_token"],
+    "whatsapp": ["whatsapp_access_token", "whatsapp_phone_number_id"],
+    "telegram": ["telegram_bot_token"],
+}
+
+
+def _channel_is_configured(channel: str, settings: Settings) -> bool:
+    """Check if a channel has its required fields set."""
+    # Personal mode WhatsApp needs no tokens — just start and scan QR
+    if channel == "whatsapp" and settings.whatsapp_mode == "personal":
+        return True
+    for field in _CHANNEL_REQUIRED.get(channel, []):
+        if not getattr(settings, field, None):
+            return False
+    return True
+
+
+def _channel_is_running(channel: str) -> bool:
+    """Check if a channel adapter is currently running."""
+    adapter = _channel_adapters.get(channel)
+    if adapter is None:
+        return False
+    return getattr(adapter, "_running", False)
+
+
+@app.get("/api/channels/status")
+async def get_channels_status():
+    """Get status of all 4 channel adapters."""
+    settings = Settings.load()
+    result = {}
+    for channel in ("discord", "slack", "whatsapp", "telegram"):
+        result[channel] = {
+            "configured": _channel_is_configured(channel, settings),
+            "running": _channel_is_running(channel),
+        }
+    # Add WhatsApp mode info
+    result["whatsapp"]["mode"] = settings.whatsapp_mode
+    return result
+
+
+@app.post("/api/channels/save")
+async def save_channel_config(request: Request):
+    """Save token/config for a channel."""
+    data = await request.json()
+    channel = data.get("channel", "")
+    config = data.get("config", {})
+
+    if channel not in _CHANNEL_CONFIG_KEYS:
+        raise HTTPException(status_code=400, detail=f"Unknown channel: {channel}")
+
+    key_map = _CHANNEL_CONFIG_KEYS[channel]
+    settings = Settings.load()
+
+    for frontend_key, value in config.items():
+        settings_field = key_map.get(frontend_key)
+        if settings_field:
+            setattr(settings, settings_field, value)
+
+    settings.save()
+    return {"status": "ok"}
+
+
+@app.post("/api/channels/toggle")
+async def toggle_channel(request: Request):
+    """Start or stop a channel adapter dynamically."""
+    data = await request.json()
+    channel = data.get("channel", "")
+    action = data.get("action", "")
+
+    if channel not in _CHANNEL_CONFIG_KEYS:
+        raise HTTPException(status_code=400, detail=f"Unknown channel: {channel}")
+
+    settings = Settings.load()
+
+    if action == "start":
+        if _channel_is_running(channel):
+            return {"error": f"{channel} is already running"}
+        if not _channel_is_configured(channel, settings):
+            return {"error": f"{channel} is not configured — save tokens first"}
+        try:
+            await _start_channel_adapter(channel, settings)
+            logger.info(f"{channel.title()} adapter started via dashboard")
+        except Exception as e:
+            return {"error": f"Failed to start {channel}: {e}"}
+    elif action == "stop":
+        if not _channel_is_running(channel):
+            return {"error": f"{channel} is not running"}
+        try:
+            await _stop_channel_adapter(channel)
+            logger.info(f"{channel.title()} adapter stopped via dashboard")
+        except Exception as e:
+            return {"error": f"Failed to stop {channel}: {e}"}
+    else:
+        raise HTTPException(status_code=400, detail=f"Unknown action: {action}")
+
+    return {
+        "channel": channel,
+        "configured": _channel_is_configured(channel, settings),
+        "running": _channel_is_running(channel),
+    }
 
 
 @app.get("/")
@@ -179,7 +464,8 @@ async def verify_token(
 @app.middleware("http")
 async def auth_middleware(request: Request, call_next):
     # Exempt routes
-    exempt_paths = ["/static", "/favicon.ico", "/api/qr"]  # Allow getting QR code to login
+    # Allow getting QR code to login; allow WhatsApp webhook (Meta verification)
+    exempt_paths = ["/static", "/favicon.ico", "/api/qr", "/webhook/whatsapp", "/api/whatsapp/qr"]
 
     # Simple check for static
     for path in exempt_paths:

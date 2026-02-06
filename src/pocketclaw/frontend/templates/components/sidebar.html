@@ -87,6 +87,15 @@
   <!-- Config Section -->
   <nav class="flex flex-col gap-1.5">
     <h3 class="nav-title text-[11px] uppercase tracking-wider text-[var(--text-secondary)] font-semibold mb-2.5 pl-3">Config</h3>
+    <button class="nav-item" @click="openChannels(); sidebarOpen = false">
+      <i data-lucide="radio-tower" class="w-5 h-5"></i>
+      <span>Channels</span>
+      <span
+        x-show="runningChannelCount() > 0"
+        class="ml-auto bg-success/20 text-success text-xs px-2 py-0.5 rounded-full"
+        x-text="runningChannelCount()"
+      ></span>
+    </button>
     <button class="nav-item" @click="showSettings = true; sidebarOpen = false">
       <i data-lucide="settings" class="w-5 h-5"></i>
       <span>Settings</span>

@@ -44,7 +44,12 @@ window.PocketPaw.Channels = {
             // WhatsApp personal mode QR state
             whatsappQr: null,
             whatsappConnected: false,
-            whatsappQrPolling: null
+            whatsappQrPolling: null,
+            // Generic webhooks
+            webhookSlots: [],
+            showAddWebhook: false,
+            newWebhookName: '',
+            newWebhookDescription: ''
         };
     },
 
@@ -65,7 +70,8 @@ window.PocketPaw.Channels = {
                     signal: 'Signal',
                     matrix: 'Matrix',
                     teams: 'Teams',
-                    google_chat: 'GChat'
+                    google_chat: 'GChat',
+                    webhooks: 'Webhooks'
                 };
                 return names[tab] || tab;
             },
@@ -76,6 +82,7 @@ window.PocketPaw.Channels = {
             async openChannels() {
                 this.showChannels = true;
                 await this.getChannelStatus();
+                await this.loadWebhooks();
                 this.startWhatsAppQrPollingIfNeeded();
                 this.$nextTick(() => {
                     if (window.refreshIcons) window.refreshIcons();
@@ -267,6 +274,111 @@ window.PocketPaw.Channels = {
              */
             runningChannelCount() {
                 return Object.values(this.channelStatus).filter(s => s.running).length;
+            },
+
+            /**
+             * Load webhook slots from backend
+             */
+            async loadWebhooks() {
+                try {
+                    const res = await fetch('/api/webhooks');
+                    if (res.ok) {
+                        const data = await res.json();
+                        this.webhookSlots = data.webhooks || [];
+                    }
+                } catch (e) {
+                    console.error('Failed to load webhooks', e);
+                }
+            },
+
+            /**
+             * Add a new webhook slot
+             */
+            async addWebhook() {
+                if (!this.newWebhookName.trim()) return;
+                this.channelLoading = true;
+                try {
+                    const res = await fetch('/api/webhooks/add', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            name: this.newWebhookName.trim(),
+                            description: this.newWebhookDescription.trim()
+                        })
+                    });
+                    const data = await res.json();
+                    if (data.status === 'ok') {
+                        this.showToast('Webhook created!', 'success');
+                        this.newWebhookName = '';
+                        this.newWebhookDescription = '';
+                        this.showAddWebhook = false;
+                        await this.loadWebhooks();
+                    } else {
+                        this.showToast(data.detail || 'Failed to create webhook', 'error');
+                    }
+                } catch (e) {
+                    this.showToast('Failed to create webhook: ' + e.message, 'error');
+                } finally {
+                    this.channelLoading = false;
+                }
+            },
+
+            /**
+             * Remove a webhook slot
+             */
+            async removeWebhook(name) {
+                if (!confirm(`Remove webhook "${name}"?`)) return;
+                try {
+                    const res = await fetch('/api/webhooks/remove', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ name })
+                    });
+                    const data = await res.json();
+                    if (data.status === 'ok') {
+                        this.showToast('Webhook removed', 'info');
+                        await this.loadWebhooks();
+                    } else {
+                        this.showToast(data.detail || 'Failed to remove', 'error');
+                    }
+                } catch (e) {
+                    this.showToast('Failed to remove webhook: ' + e.message, 'error');
+                }
+            },
+
+            /**
+             * Regenerate a webhook slot's secret
+             */
+            async regenerateWebhookSecret(name) {
+                if (!confirm(`Regenerate secret for "${name}"? Existing integrations will break.`)) return;
+                try {
+                    const res = await fetch('/api/webhooks/regenerate-secret', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ name })
+                    });
+                    const data = await res.json();
+                    if (data.status === 'ok') {
+                        this.showToast('Secret regenerated', 'success');
+                        await this.loadWebhooks();
+                    } else {
+                        this.showToast(data.detail || 'Failed to regenerate', 'error');
+                    }
+                } catch (e) {
+                    this.showToast('Failed to regenerate: ' + e.message, 'error');
+                }
+            },
+
+            /**
+             * Copy text to clipboard
+             */
+            async copyToClipboard(text) {
+                try {
+                    await navigator.clipboard.writeText(text);
+                    this.showToast('Copied!', 'success');
+                } catch (e) {
+                    this.showToast('Failed to copy', 'error');
+                }
             }
         };
     }

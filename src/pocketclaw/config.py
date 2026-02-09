@@ -303,6 +303,15 @@ class Settings(BaseSettings):
         default_factory=list, description="Google Chat space IDs allowed to use the bot"
     )
 
+    # Generic Inbound Webhooks
+    webhook_configs: list[dict] = Field(
+        default_factory=list,
+        description="Configured webhook slots [{name, secret, description, sync_timeout}]",
+    )
+    webhook_sync_timeout: int = Field(
+        default=30, description="Default timeout (seconds) for sync webhook responses"
+    )
+
     # Web Server
     web_host: str = Field(default="127.0.0.1", description="Web server host")
     web_port: int = Field(default=8888, description="Web server port")
@@ -435,6 +444,9 @@ class Settings(BaseSettings):
             "gchat_project_id": self.gchat_project_id,
             "gchat_subscription_id": self.gchat_subscription_id,
             "gchat_allowed_space_ids": self.gchat_allowed_space_ids,
+            # Generic Webhooks
+            "webhook_configs": self.webhook_configs,
+            "webhook_sync_timeout": self.webhook_sync_timeout,
         }
         config_path.write_text(json.dumps(data, indent=2))
 

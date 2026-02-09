@@ -18,11 +18,12 @@ Changes:
 """
 
 import logging
+from collections.abc import AsyncIterator
 from pathlib import Path
-from typing import AsyncIterator, Optional, Any
+from typing import Any
 
-from pocketclaw.config import Settings
 from pocketclaw.agents.protocol import AgentEvent, ExecutorProtocol
+from pocketclaw.config import Settings
 from pocketclaw.tools.policy import ToolPolicy
 
 logger = logging.getLogger(__name__)
@@ -156,7 +157,7 @@ class ClaudeAgentSDK:
         "WebFetch": "browser",
     }
 
-    def __init__(self, settings: Settings, executor: Optional[ExecutorProtocol] = None):
+    def __init__(self, settings: Settings, executor: ExecutorProtocol | None = None):
         self.settings = settings
         self._executor = executor  # Optional - SDK has built-in execution
         self._stop_flag = False
@@ -187,25 +188,19 @@ class ClaudeAgentSDK:
         """Initialize the Claude Agent SDK with all imports."""
         try:
             # Core SDK imports
-            from claude_agent_sdk import (
-                query,
-                ClaudeAgentOptions,
-                HookMatcher,
-            )
-
             # Message type imports
-            from claude_agent_sdk import (
-                AssistantMessage,
-                UserMessage,
-                SystemMessage,
-                ResultMessage,
-            )
-
             # Content block imports
             from claude_agent_sdk import (
+                AssistantMessage,
+                ClaudeAgentOptions,
+                HookMatcher,
+                ResultMessage,
+                SystemMessage,
                 TextBlock,
-                ToolUseBlock,
                 ToolResultBlock,
+                ToolUseBlock,
+                UserMessage,
+                query,
             )
 
             # Store references
@@ -254,7 +249,7 @@ class ClaudeAgentSDK:
         self._cwd = path
         logger.info(f"📂 Working directory set to: {path}")
 
-    def _is_dangerous_command(self, command: str) -> Optional[str]:
+    def _is_dangerous_command(self, command: str) -> str | None:
         """Check if a command matches dangerous patterns.
 
         Args:
@@ -373,36 +368,46 @@ class ClaudeAgentSDK:
                 )
         return tools
 
-    def _get_mcp_servers(self) -> list[dict]:
+    def _get_mcp_servers(self) -> dict[str, dict]:
         """Load enabled MCP server configs, filtered by tool policy.
 
-        Returns a list of dicts suitable for the Claude SDK ``mcp_servers`` option.
-        Only stdio servers are supported by the SDK's built-in MCP integration.
+        Returns a dict keyed by server name.  The SDK supports three
+        transport types: stdio, sse, and http — each with its own
+        TypedDict shape (McpStdioServerConfig, McpSSEServerConfig,
+        McpHttpServerConfig).
         """
         try:
             from pocketclaw.mcp.config import load_mcp_config
         except ImportError:
-            return []
+            return {}
 
         configs = load_mcp_config()
-        servers = []
+        servers: dict[str, dict] = {}
         for cfg in configs:
             if not cfg.enabled:
-                continue
-            if cfg.transport != "stdio":
-                logger.debug("Skipping MCP server '%s' (transport=%s)", cfg.name, cfg.transport)
                 continue
             if not self._policy.is_mcp_server_allowed(cfg.name):
                 logger.info("MCP server '%s' blocked by tool policy", cfg.name)
                 continue
-            servers.append(
-                {
-                    "name": cfg.name,
-                    "command": cfg.command,
-                    "args": cfg.args,
-                    "env": cfg.env,
-                }
-            )
+
+            if cfg.transport == "stdio":
+                entry: dict = {"type": "stdio", "command": cfg.command}
+                if cfg.args:
+                    entry["args"] = cfg.args
+                if cfg.env:
+                    entry["env"] = cfg.env
+            elif cfg.transport in ("http", "sse"):
+                if not cfg.url:
+                    logger.warning("MCP server '%s' (%s) has no url", cfg.name, cfg.transport)
+                    continue
+                entry = {"type": cfg.transport, "url": cfg.url}
+                if cfg.env:
+                    entry["headers"] = cfg.env
+            else:
+                logger.debug("Skipping MCP '%s' (unknown transport=%s)", cfg.name, cfg.transport)
+                continue
+
+            servers[cfg.name] = entry
         return servers
 
     async def chat(
@@ -500,13 +505,11 @@ class ClaudeAgentSDK:
             if self._StreamEvent is not None:
                 options_kwargs["include_partial_messages"] = True
 
-            # Permission mode based on settings
-            if self.settings.bypass_permissions:
-                options_kwargs["permission_mode"] = "bypassPermissions"
-                logger.info("⚡ Permission bypass enabled")
-            else:
-                # Accept edits automatically but prompt for other things
-                options_kwargs["permission_mode"] = "acceptEdits"
+            # Permission handling — PocketPaw runs headless (web/chat), so
+            # there is no terminal to show interactive permission prompts.
+            # bypassPermissions auto-approves ALL tool calls (including MCP).
+            # Dangerous Bash commands are still caught by the PreToolUse hook.
+            options_kwargs["permission_mode"] = "bypassPermissions"
 
             # Create options
             options = self._ClaudeAgentOptions(**options_kwargs)

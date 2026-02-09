@@ -7,6 +7,7 @@
  * - List/add/remove servers
  * - Enable/disable servers
  * - View tool inventory
+ * - Browse & install presets from the catalog
  */
 
 window.PocketPaw = window.PocketPaw || {};
@@ -26,7 +27,14 @@ window.PocketPaw.MCP = {
                 args: '',
                 url: ''
             },
-            mcpLoading: false
+            mcpLoading: false,
+            mcpPresets: [],
+            mcpView: 'servers',
+            mcpInstallId: null,
+            mcpInstallEnv: {},
+            mcpInstallArgs: '',
+            mcpInstalling: false,
+            mcpCategoryFilter: 'all'
         };
     },
 
@@ -41,6 +49,7 @@ window.PocketPaw.MCP = {
             async openMCP() {
                 this.showMCP = true;
                 await this.getMCPStatus();
+                await this.loadPresets();
                 this.$nextTick(() => {
                     if (window.refreshIcons) window.refreshIcons();
                 });
@@ -114,6 +123,7 @@ window.PocketPaw.MCP = {
                     if (data.status === 'ok') {
                         this.showToast(`MCP server "${name}" removed`, 'info');
                         await this.getMCPStatus();
+                        await this.loadPresets();
                     } else {
                         this.showToast(data.error || 'Failed to remove', 'error');
                     }
@@ -153,6 +163,101 @@ window.PocketPaw.MCP = {
              */
             connectedMCPCount() {
                 return Object.values(this.mcpServers).filter(s => s.connected).length;
+            },
+
+            /**
+             * Load presets from backend
+             */
+            async loadPresets() {
+                try {
+                    const res = await fetch('/api/mcp/presets');
+                    if (res.ok) {
+                        this.mcpPresets = await res.json();
+                    }
+                } catch (e) {
+                    console.error('Failed to load MCP presets', e);
+                }
+            },
+
+            /**
+             * Show install form for a preset
+             */
+            showInstallForm(presetId) {
+                if (this.mcpInstallId === presetId) {
+                    this.mcpInstallId = null;
+                    return;
+                }
+                this.mcpInstallId = presetId;
+                this.mcpInstallArgs = '';
+                const preset = this.mcpPresets.find(p => p.id === presetId);
+                if (preset) {
+                    const env = {};
+                    for (const ek of preset.env_keys) {
+                        env[ek.key] = '';
+                    }
+                    this.mcpInstallEnv = env;
+                }
+                this.$nextTick(() => {
+                    if (window.refreshIcons) window.refreshIcons();
+                });
+            },
+
+            /**
+             * Install a preset
+             */
+            async installPreset() {
+                if (!this.mcpInstallId) return;
+                this.mcpInstalling = true;
+                try {
+                    const body = {
+                        preset_id: this.mcpInstallId,
+                        env: this.mcpInstallEnv
+                    };
+                    const args = this.mcpInstallArgs.trim();
+                    if (args) {
+                        body.extra_args = args.split(/\s+/);
+                    }
+                    const res = await fetch('/api/mcp/presets/install', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(body)
+                    });
+                    const data = await res.json();
+                    if (res.ok && data.status === 'ok') {
+                        const toolCount = data.tools ? data.tools.length : 0;
+                        const msg = data.connected
+                            ? `Installed — ${toolCount} tools discovered`
+                            : 'Installed (not yet connected)';
+                        this.showToast(msg, 'success');
+                        this.mcpInstallId = null;
+                        await this.getMCPStatus();
+                        await this.loadPresets();
+                    } else {
+                        this.showToast(data.error || 'Install failed', 'error');
+                    }
+                } catch (e) {
+                    this.showToast('Install failed: ' + e.message, 'error');
+                } finally {
+                    this.mcpInstalling = false;
+                    this.$nextTick(() => {
+                        if (window.refreshIcons) window.refreshIcons();
+                    });
+                }
+            },
+
+            /**
+             * Filter presets by selected category
+             */
+            filteredPresets() {
+                if (this.mcpCategoryFilter === 'all') return this.mcpPresets;
+                return this.mcpPresets.filter(p => p.category === this.mcpCategoryFilter);
+            },
+
+            /**
+             * Check if a preset needs extra args (filesystem, postgres, sqlite)
+             */
+            presetNeedsArgs(presetId) {
+                return ['filesystem', 'postgres', 'sqlite'].includes(presetId);
             }
         };
     }

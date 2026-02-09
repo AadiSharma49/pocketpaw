@@ -30,7 +30,7 @@
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/static/css/styles.css" />
+    <link rel="stylesheet" href="/static/css/styles.css?v={{ v }}" />
 
     <!-- UnoCSS Runtime (utilities alongside custom CSS) -->
     <script>
@@ -166,22 +166,22 @@
     <!-- Toast Container -->
     <div class="toast-container" x-ref="toasts"></div>
 
-    <!-- Scripts -->
-    <script src="/static/js/websocket.js"></script>
-    <script src="/static/js/tools.js"></script>
+    <!-- Scripts (cache-busted via ?v= hash) -->
+    <script src="/static/js/websocket.js?v={{ v }}"></script>
+    <script src="/static/js/tools.js?v={{ v }}"></script>
     <!-- Feature modules (loaded before app.js) -->
-    <script src="/static/js/features/chat.js"></script>
-    <script src="/static/js/features/file-browser.js"></script>
-    <script src="/static/js/features/reminders.js"></script>
-    <script src="/static/js/features/intentions.js"></script>
-    <script src="/static/js/features/skills.js"></script>
-    <script src="/static/js/features/transparency.js"></script>
-    <script src="/static/js/features/remote-access.js"></script>
-    <script src="/static/js/features/mission-control.js"></script>
-    <script src="/static/js/features/channels.js"></script>
-    <script src="/static/js/features/mcp.js"></script>
+    <script src="/static/js/features/chat.js?v={{ v }}"></script>
+    <script src="/static/js/features/file-browser.js?v={{ v }}"></script>
+    <script src="/static/js/features/reminders.js?v={{ v }}"></script>
+    <script src="/static/js/features/intentions.js?v={{ v }}"></script>
+    <script src="/static/js/features/skills.js?v={{ v }}"></script>
+    <script src="/static/js/features/transparency.js?v={{ v }}"></script>
+    <script src="/static/js/features/remote-access.js?v={{ v }}"></script>
+    <script src="/static/js/features/mission-control.js?v={{ v }}"></script>
+    <script src="/static/js/features/channels.js?v={{ v }}"></script>
+    <script src="/static/js/features/mcp.js?v={{ v }}"></script>
     <!-- Main app (assembles features) -->
-    <script src="/static/js/app.js"></script>
+    <script src="/static/js/app.js?v={{ v }}"></script>
 
     <!-- Initialize Lucide icons -->
     <script>

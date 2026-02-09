@@ -26,7 +26,7 @@
 
     <!-- Tab Buttons -->
     <div class="flex flex-wrap border-b border-[var(--glass-border)] shrink-0">
-        <template x-for="tab in ['discord', 'slack', 'whatsapp', 'telegram', 'signal', 'matrix', 'teams', 'google_chat']" :key="tab">
+        <template x-for="tab in ['discord', 'slack', 'whatsapp', 'telegram', 'signal', 'matrix', 'teams', 'google_chat', 'webhooks']" :key="tab">
             <button
                 class="flex-1 min-w-[25%] py-3 text-[12px] font-medium transition-all flex items-center justify-center gap-1"
                 :class="channelsTab === tab ? 'text-[var(--accent-color)] border-b-2 border-[var(--accent-color)] bg-white/5' : 'text-white/50 hover:text-white/70 hover:bg-white/5'"
@@ -772,6 +772,119 @@
                         <i x-show="!channelLoading" data-lucide="square" class="w-4 h-4"></i>
                         Stop Google Chat
                     </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ==================== Webhooks Tab ==================== -->
+        <div x-show="channelsTab === 'webhooks'" x-transition.opacity>
+            <div class="flex flex-col gap-5">
+                <!-- Header + Add Button -->
+                <div class="flex items-center justify-between">
+                    <span class="text-[13px] text-white/60" x-text="webhookSlots.length + ' webhook' + (webhookSlots.length !== 1 ? 's' : '') + ' configured'"></span>
+                    <button
+                        class="text-[12px] font-medium text-[var(--accent-color)] hover:underline flex items-center gap-1"
+                        @click="showAddWebhook = !showAddWebhook"
+                    >
+                        <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+                        <span x-text="showAddWebhook ? 'Cancel' : 'Add Webhook'"></span>
+                    </button>
+                </div>
+
+                <!-- Inline Add Form -->
+                <div x-show="showAddWebhook" x-transition.opacity class="flex flex-col gap-3 p-4 bg-black/20 rounded-[12px] border border-[var(--glass-border)]">
+                    <div class="flex flex-col gap-2">
+                        <label class="text-[13px] font-medium text-[var(--text-secondary)]">Name</label>
+                        <input
+                            type="text"
+                            x-model="newWebhookName"
+                            placeholder="github-events"
+                            class="w-full bg-black/30 border border-[var(--glass-border)] rounded-[10px] py-2.5 px-3.5 text-[14px] text-white focus:outline-none focus:border-[var(--accent-color)] focus:bg-black/40 transition-all placeholder-white/20"
+                        />
+                    </div>
+                    <div class="flex flex-col gap-2">
+                        <label class="text-[13px] font-medium text-[var(--text-secondary)]">Description (optional)</label>
+                        <input
+                            type="text"
+                            x-model="newWebhookDescription"
+                            placeholder="GitHub push/PR events"
+                            class="w-full bg-black/30 border border-[var(--glass-border)] rounded-[10px] py-2.5 px-3.5 text-[14px] text-white focus:outline-none focus:border-[var(--accent-color)] focus:bg-black/40 transition-all placeholder-white/20"
+                        />
+                    </div>
+                    <button
+                        class="w-full bg-[var(--accent-color)] hover:bg-[var(--accent-hover)] text-white py-2.5 rounded-[10px] text-[13px] font-medium transition-all active:scale-95 disabled:opacity-50"
+                        @click="addWebhook()"
+                        :disabled="channelLoading || !newWebhookName.trim()"
+                    >Create Webhook</button>
+                </div>
+
+                <!-- Webhook Slots List -->
+                <template x-if="webhookSlots.length === 0 && !showAddWebhook">
+                    <div class="text-center py-8 text-white/30 text-[13px]">
+                        No webhooks configured yet. Click "Add Webhook" to create one.
+                    </div>
+                </template>
+
+                <template x-for="slot in webhookSlots" :key="slot.name">
+                    <div class="flex flex-col gap-3 p-4 bg-black/20 rounded-[12px] border border-[var(--glass-border)]">
+                        <!-- Name + Description + Remove -->
+                        <div class="flex items-start justify-between">
+                            <div>
+                                <div class="text-[14px] font-medium text-white" x-text="slot.name"></div>
+                                <div x-show="slot.description" class="text-[12px] text-white/40 mt-0.5" x-text="slot.description"></div>
+                            </div>
+                            <button
+                                class="p-1.5 text-white/30 hover:text-[var(--danger-color)] hover:bg-[var(--danger-color)]/10 rounded-lg transition-colors"
+                                @click="removeWebhook(slot.name)"
+                                title="Remove webhook"
+                            >
+                                <i data-lucide="trash-2" class="w-4 h-4"></i>
+                            </button>
+                        </div>
+
+                        <!-- URL -->
+                        <div class="flex flex-col gap-1">
+                            <label class="text-[11px] font-medium text-white/40 uppercase tracking-wider">URL</label>
+                            <div class="flex gap-2 items-center">
+                                <code class="flex-1 text-[12px] text-[var(--accent-color)] bg-black/30 px-3 py-2 rounded-[8px] truncate" x-text="slot.url"></code>
+                                <button
+                                    class="shrink-0 p-2 text-white/40 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+                                    @click="copyToClipboard(slot.url)"
+                                    title="Copy URL"
+                                >
+                                    <i data-lucide="copy" class="w-4 h-4"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Secret -->
+                        <div class="flex flex-col gap-1">
+                            <label class="text-[11px] font-medium text-white/40 uppercase tracking-wider">Secret</label>
+                            <div class="flex gap-2 items-center">
+                                <code class="flex-1 text-[12px] text-white/50 bg-black/30 px-3 py-2 rounded-[8px] truncate" x-text="slot.secret.substring(0, 8) + '••••••••••••'"></code>
+                                <button
+                                    class="shrink-0 p-2 text-white/40 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+                                    @click="copyToClipboard(slot.secret)"
+                                    title="Copy secret"
+                                >
+                                    <i data-lucide="copy" class="w-4 h-4"></i>
+                                </button>
+                                <button
+                                    class="shrink-0 p-2 text-white/40 hover:text-[var(--warning-color)] hover:bg-[var(--warning-color)]/10 rounded-lg transition-colors"
+                                    @click="regenerateWebhookSecret(slot.name)"
+                                    title="Regenerate secret"
+                                >
+                                    <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </template>
+
+                <!-- Usage hint -->
+                <div x-show="webhookSlots.length > 0" class="text-[11px] text-white/30 leading-relaxed">
+                    <strong>Usage:</strong> <code class="text-[11px]">curl -X POST &lt;url&gt; -H "X-Webhook-Secret: &lt;secret&gt;" -H "Content-Type: application/json" -d '{"content": "hello"}'</code>
+                    <br/>Add <code class="text-[11px]">?wait=true</code> to wait for the agent's response.
                 </div>
             </div>
         </div>

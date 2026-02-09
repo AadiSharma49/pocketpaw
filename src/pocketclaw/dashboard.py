@@ -239,6 +239,14 @@ async def _start_channel_adapter(channel: str, settings: Settings | None = None)
         _channel_adapters["google_chat"] = adapter
         return True
 
+    if channel == "webhook":
+        from pocketclaw.bus.adapters.webhook_adapter import WebhookAdapter
+
+        adapter = WebhookAdapter()
+        await adapter.start(bus)
+        _channel_adapters["webhook"] = adapter
+        return True
+
     return False
 
 
@@ -279,6 +287,15 @@ async def startup_event():
                 logger.info(f"{ch.title()} adapter auto-started alongside dashboard")
         except Exception as e:
             logger.warning(f"Failed to auto-start {ch} adapter: {e}")
+
+    # Auto-start webhook adapter if webhooks are configured
+    if settings.webhook_configs:
+        try:
+            if await _start_channel_adapter("webhook", settings):
+                count = len(settings.webhook_configs)
+                logger.info("Webhook adapter auto-started (%d slots)", count)
+        except Exception as e:
+            logger.warning("Failed to auto-start webhook adapter: %s", e)
 
     # Auto-start enabled MCP servers
     try:
@@ -448,6 +465,82 @@ async def test_mcp_server(request: Request):
     }
 
 
+# ==================== MCP Preset Routes ====================
+
+
+@app.get("/api/mcp/presets")
+async def list_mcp_presets():
+    """Return all MCP presets with installed flag."""
+    from pocketclaw.mcp.config import load_mcp_config
+    from pocketclaw.mcp.presets import get_all_presets
+
+    installed_names = {c.name for c in load_mcp_config()}
+    presets = get_all_presets()
+    return [
+        {
+            "id": p.id,
+            "name": p.name,
+            "description": p.description,
+            "icon": p.icon,
+            "category": p.category,
+            "package": p.package,
+            "transport": p.transport,
+            "url": p.url,
+            "docs_url": p.docs_url,
+            "installed": p.id in installed_names,
+            "env_keys": [
+                {
+                    "key": e.key,
+                    "label": e.label,
+                    "required": e.required,
+                    "placeholder": e.placeholder,
+                    "secret": e.secret,
+                }
+                for e in p.env_keys
+            ],
+        }
+        for p in presets
+    ]
+
+
+@app.post("/api/mcp/presets/install")
+async def install_mcp_preset(request: Request):
+    """Install an MCP preset by ID with user-supplied env vars."""
+    from fastapi.responses import JSONResponse
+
+    from pocketclaw.mcp.manager import get_mcp_manager
+    from pocketclaw.mcp.presets import get_preset, preset_to_config
+
+    data = await request.json()
+    preset_id = data.get("preset_id", "")
+    env = data.get("env", {})
+    extra_args = data.get("extra_args", None)
+
+    preset = get_preset(preset_id)
+    if not preset:
+        return JSONResponse({"error": f"Unknown preset: {preset_id}"}, status_code=404)
+
+    # Validate required env keys
+    missing = [ek.key for ek in preset.env_keys if ek.required and not env.get(ek.key)]
+    if missing:
+        return JSONResponse(
+            {"error": f"Missing required env vars: {', '.join(missing)}"},
+            status_code=400,
+        )
+
+    config = preset_to_config(preset, env=env, extra_args=extra_args)
+    mgr = get_mcp_manager()
+    mgr.add_server_config(config)
+    connected = await mgr.start_server(config)
+    tools = mgr.discover_tools(config.name) if connected else []
+
+    return {
+        "status": "ok",
+        "connected": connected,
+        "tools": [{"name": t.name, "description": t.description} for t in tools],
+    }
+
+
 # ==================== WhatsApp Webhook Routes ====================
 
 
@@ -490,6 +583,183 @@ async def get_whatsapp_qr():
         "qr": getattr(adapter, "_qr_data", None),
         "connected": getattr(adapter, "_connected", False),
     }
+
+
+# ==================== Generic Inbound Webhook API ====================
+
+
+@app.post("/webhook/inbound/{webhook_name}")
+async def webhook_inbound(
+    webhook_name: str,
+    request: Request,
+    wait: bool = Query(False),
+):
+    """Receive an inbound webhook POST.
+
+    Auth: ``X-Webhook-Secret`` header must match the slot's secret,
+    OR ``X-Webhook-Signature: sha256=<hex>`` HMAC-SHA256 of the raw body.
+    """
+    import hashlib
+    import hmac
+
+    settings = Settings.load()
+    slot_dict = None
+    for cfg in settings.webhook_configs:
+        if cfg.get("name") == webhook_name:
+            slot_dict = cfg
+            break
+
+    if slot_dict is None:
+        raise HTTPException(status_code=404, detail=f"Webhook '{webhook_name}' not found")
+
+    from pocketclaw.bus.adapters.webhook_adapter import WebhookSlotConfig
+
+    slot = WebhookSlotConfig(
+        name=slot_dict["name"],
+        secret=slot_dict["secret"],
+        description=slot_dict.get("description", ""),
+        sync_timeout=slot_dict.get("sync_timeout", settings.webhook_sync_timeout),
+    )
+
+    # --- Auth: secret header or HMAC signature ---
+    raw_body = await request.body()
+    secret_header = request.headers.get("X-Webhook-Secret", "")
+    sig_header = request.headers.get("X-Webhook-Signature", "")
+
+    authed = False
+    if secret_header and secret_header == slot.secret:
+        authed = True
+    elif sig_header.startswith("sha256="):
+        expected = hmac.new(slot.secret.encode(), raw_body, hashlib.sha256).hexdigest()
+        if hmac.compare_digest(sig_header[7:], expected):
+            authed = True
+
+    if not authed:
+        raise HTTPException(status_code=403, detail="Invalid webhook secret or signature")
+
+    # Parse JSON body
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid JSON body")
+
+    # Ensure webhook adapter is running (stateless — auto-start is cheap)
+    if "webhook" not in _channel_adapters:
+        try:
+            await _start_channel_adapter("webhook", settings)
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Failed to start webhook adapter: {e}")
+
+    adapter = _channel_adapters["webhook"]
+    request_id = str(uuid.uuid4())
+
+    if not wait:
+        await adapter.handle_webhook(slot, body, request_id, sync=False)
+        return {"status": "accepted", "request_id": request_id}
+
+    # Sync mode — wait for agent response
+    response_text = await adapter.handle_webhook(slot, body, request_id, sync=True)
+    if response_text is None:
+        return {"status": "timeout", "request_id": request_id}
+    return {"status": "ok", "request_id": request_id, "response": response_text}
+
+
+@app.get("/api/webhooks")
+async def list_webhooks(request: Request):
+    """List all configured webhook slots with generated URLs."""
+    settings = Settings.load()
+    host = request.headers.get("host", f"localhost:{settings.web_port}")
+    protocol = "https" if "trycloudflare" in host else "http"
+
+    slots = []
+    for cfg in settings.webhook_configs:
+        name = cfg.get("name", "")
+        slots.append(
+            {
+                "name": name,
+                "description": cfg.get("description", ""),
+                "secret": cfg.get("secret", ""),
+                "sync_timeout": cfg.get("sync_timeout", settings.webhook_sync_timeout),
+                "url": f"{protocol}://{host}/webhook/inbound/{name}",
+            }
+        )
+    return {"webhooks": slots}
+
+
+@app.post("/api/webhooks/add")
+async def add_webhook(request: Request):
+    """Create a new webhook slot (auto-generates secret)."""
+    import secrets
+
+    data = await request.json()
+    name = data.get("name", "").strip()
+    description = data.get("description", "").strip()
+
+    if not name:
+        raise HTTPException(status_code=400, detail="Webhook name is required")
+
+    # Validate name: alphanumeric, hyphens, underscores only
+    import re
+
+    if not re.match(r"^[a-zA-Z0-9_-]+$", name):
+        raise HTTPException(
+            status_code=400,
+            detail="Webhook name must be alphanumeric (hyphens and underscores allowed)",
+        )
+
+    settings = Settings.load()
+
+    # Check for duplicate name
+    for cfg in settings.webhook_configs:
+        if cfg.get("name") == name:
+            raise HTTPException(status_code=409, detail=f"Webhook '{name}' already exists")
+
+    secret = secrets.token_urlsafe(32)
+    slot = {
+        "name": name,
+        "secret": secret,
+        "description": description,
+        "sync_timeout": data.get("sync_timeout", settings.webhook_sync_timeout),
+    }
+    settings.webhook_configs.append(slot)
+    settings.save()
+
+    return {"status": "ok", "webhook": slot}
+
+
+@app.post("/api/webhooks/remove")
+async def remove_webhook(request: Request):
+    """Remove a webhook slot by name."""
+    data = await request.json()
+    name = data.get("name", "")
+
+    settings = Settings.load()
+    original_len = len(settings.webhook_configs)
+    settings.webhook_configs = [c for c in settings.webhook_configs if c.get("name") != name]
+
+    if len(settings.webhook_configs) == original_len:
+        raise HTTPException(status_code=404, detail=f"Webhook '{name}' not found")
+
+    settings.save()
+    return {"status": "ok"}
+
+
+@app.post("/api/webhooks/regenerate-secret")
+async def regenerate_webhook_secret(request: Request):
+    """Regenerate a webhook slot's secret."""
+    import secrets
+
+    data = await request.json()
+    name = data.get("name", "")
+
+    settings = Settings.load()
+    for cfg in settings.webhook_configs:
+        if cfg.get("name") == name:
+            cfg["secret"] = secrets.token_urlsafe(32)
+            settings.save()
+            return {"status": "ok", "secret": cfg["secret"]}
+
+    raise HTTPException(status_code=404, detail=f"Webhook '{name}' not found")
 
 
 # ==================== Channel Configuration API ====================
@@ -760,10 +1030,23 @@ async def oauth_callback(
         return HTMLResponse(f"<h2>OAuth Error</h2><p>{e}</p>")
 
 
+def _static_version() -> str:
+    """Generate a cache-busting version string from JS file mtimes."""
+    import hashlib
+
+    js_dir = FRONTEND_DIR / "js"
+    if not js_dir.exists():
+        return "0"
+    mtimes = []
+    for f in sorted(js_dir.rglob("*.js")):
+        mtimes.append(str(int(f.stat().st_mtime)))
+    return hashlib.md5("|".join(mtimes).encode()).hexdigest()[:8]
+
+
 @app.get("/")
 async def index(request: Request):
     """Serve the main dashboard page."""
-    return templates.TemplateResponse("base.html", {"request": request})
+    return templates.TemplateResponse("base.html", {"request": request, "v": _static_version()})
 
 
 # ==================== Auth Middleware ====================
@@ -812,6 +1095,7 @@ async def auth_middleware(request: Request, call_next):
         "/favicon.ico",
         "/api/qr",
         "/webhook/whatsapp",
+        "/webhook/inbound",
         "/api/whatsapp/qr",
         "/oauth/callback",
     ]

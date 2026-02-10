@@ -17,6 +17,7 @@
 window.PocketPaw = window.PocketPaw || {};
 
 window.PocketPaw.MissionControl = {
+    name: 'MissionControl',
     /**
      * Get initial state for Mission Control
      */
@@ -971,3 +972,5 @@ window.PocketPaw.MissionControl = {
         };
     }
 };
+
+window.PocketPaw.Loader.register('MissionControl', window.PocketPaw.MissionControl);

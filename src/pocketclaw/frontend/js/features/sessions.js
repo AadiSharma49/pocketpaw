@@ -10,6 +10,7 @@
 window.PocketPaw = window.PocketPaw || {};
 
 window.PocketPaw.Sessions = {
+    name: 'Sessions',
     getState() {
         return {
             sessions: [],
@@ -18,7 +19,6 @@ window.PocketPaw.Sessions = {
             sessionsTotal: 0,
             sessionSearch: '',
             sessionsCollapsed: false,
-            recentSessions: [],
             editingSessionId: null,
             editingSessionTitle: ''
         };
@@ -249,31 +249,6 @@ window.PocketPaw.Sessions = {
             },
 
             /**
-             * Load recent sessions for inbox view
-             */
-            async loadRecentSessions() {
-                try {
-                    const res = await fetch('/api/sessions/recent?limit=20');
-                    if (res.ok) {
-                        const data = await res.json();
-                        this.recentSessions = data.sessions || [];
-                    }
-                } catch (e) {
-                    console.error('[Sessions] Failed to load recent:', e);
-                }
-            },
-
-            /**
-             * Handle inbox_update system event
-             */
-            handleInboxUpdate(data) {
-                // Refresh recent sessions list for inbox
-                this.loadRecentSessions();
-                // Also refresh sidebar sessions
-                this.loadSessions();
-            },
-
-            /**
              * Auto-title: update session in sidebar after first response
              */
             autoTitleCurrentSession() {
@@ -292,3 +267,5 @@ window.PocketPaw.Sessions = {
         };
     }
 };
+
+window.PocketPaw.Loader.register('Sessions', window.PocketPaw.Sessions);

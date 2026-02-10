@@ -13,6 +13,7 @@
 window.PocketPaw = window.PocketPaw || {};
 
 window.PocketPaw.MCP = {
+    name: 'MCP',
     /**
      * Get initial state for MCP
      */
@@ -28,6 +29,7 @@ window.PocketPaw.MCP = {
                 url: ''
             },
             mcpLoading: false,
+            mcpShowAddForm: false,
             mcpPresets: [],
             mcpView: 'servers',
             mcpInstallId: null,
@@ -262,3 +264,5 @@ window.PocketPaw.MCP = {
         };
     }
 };
+
+window.PocketPaw.Loader.register('MCP', window.PocketPaw.MCP);

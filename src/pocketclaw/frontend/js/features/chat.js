@@ -13,6 +13,7 @@
 window.PocketPaw = window.PocketPaw || {};
 
 window.PocketPaw.Chat = {
+    name: 'Chat',
     /**
      * Get initial state for Chat
      */
@@ -204,3 +205,5 @@ window.PocketPaw.Chat = {
         };
     }
 };
+
+window.PocketPaw.Loader.register('Chat', window.PocketPaw.Chat);

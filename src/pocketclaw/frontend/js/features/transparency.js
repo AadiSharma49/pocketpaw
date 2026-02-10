@@ -13,6 +13,7 @@
 window.PocketPaw = window.PocketPaw || {};
 
 window.PocketPaw.Transparency = {
+    name: 'Transparency',
     /**
      * Get initial state for Transparency features
      */
@@ -90,12 +91,6 @@ window.PocketPaw.Transparency = {
                     if (this.showAudit && data.data) {
                         this.auditLogs.unshift(data.data);
                     }
-                    return;
-                }
-
-                // Handle inbox update events
-                if (eventType === 'inbox_update') {
-                    if (this.handleInboxUpdate) this.handleInboxUpdate(data.data || {});
                     return;
                 }
 
@@ -359,3 +354,5 @@ window.PocketPaw.Transparency = {
         };
     }
 };
+
+window.PocketPaw.Loader.register('Transparency', window.PocketPaw.Transparency);

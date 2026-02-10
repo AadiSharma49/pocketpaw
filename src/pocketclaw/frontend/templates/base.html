@@ -55,6 +55,10 @@
     <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
 
+    <!-- Markdown rendering -->
+    <script src="https://cdn.jsdelivr.net/npm/marked@14/marked.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js"></script>
+
     <script
       defer
       src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.3/dist/cdn.min.js"
@@ -95,18 +99,6 @@
                 Chat
             </button>
             <button
-                class="px-4 md:px-6 py-1.5 rounded-[7px] text-[13px] font-medium transition-all flex items-center gap-1.5"
-                :class="view === 'inbox' ? 'bg-[#636366]/80 text-white shadow-sm' : 'text-[var(--text-secondary)] hover:text-white'"
-                @click="view = 'inbox'; loadRecentSessions()"
-            >
-                Inbox
-                <span
-                    x-show="recentSessions.filter(s => s.channel !== 'websocket').length > 0"
-                    class="bg-accent text-white text-[10px] px-1.5 py-0 rounded-full leading-tight"
-                    x-text="recentSessions.filter(s => s.channel !== 'websocket').length"
-                ></span>
-            </button>
-            <button
                 class="px-4 md:px-6 py-1.5 rounded-[7px] text-[13px] font-medium transition-all"
                 :class="view === 'activity' ? 'bg-[#636366]/80 text-white shadow-sm' : 'text-[var(--text-secondary)] hover:text-white'"
                 @click="view = 'activity'"
@@ -134,28 +126,20 @@
             </div>
         </div>
 
-        <!-- Center: Remote Button (desktop: full button, mobile: hidden) -->
-        <div class="flex-1 flex justify-center pointer-events-auto hidden md:flex">
+        <!-- Right: Remote Button -->
+        <div class="flex items-center pointer-events-auto">
             <button
-                class="flex items-center gap-2 bg-white/5 hover:bg-white/10 border border-white/10 px-4 py-1.5 rounded-full transition-all hover:scale-105 active:scale-95"
+                class="flex items-center gap-2 bg-white/5 hover:bg-white/10 border border-white/10 px-3 py-1.5 rounded-full transition-all hover:scale-105 active:scale-95"
                 @click="openRemote()"
             >
                 <i data-lucide="smartphone" class="w-4 h-4 text-accent"></i>
-                <span class="text-sm font-medium text-white/90">Take Your Paw With You</span>
+                <span class="text-sm font-medium text-white/90 hidden md:inline">Take Your Paw With You</span>
             </button>
         </div>
-
-        <!-- Right: Mobile-only remote icon -->
-        <button
-            class="pointer-events-auto md:hidden p-2 rounded-lg text-white/70 hover:bg-white/10 hover:text-white transition-colors"
-            @click="openRemote()"
-        >
-            <i data-lucide="smartphone" class="w-5 h-5 text-accent"></i>
-        </button>
       </header>
 
       {% include "components/chat.html" %}
-      {% include "components/inbox.html" %}
+
       {% include "components/activity.html" %}
       {% include "components/terminal.html" %}
       {% include "components/missions.html" %}
@@ -170,6 +154,8 @@
     <script src="/static/js/state.js?v={{ v }}"></script>
     <script src="/static/js/websocket.js?v={{ v }}"></script>
     <script src="/static/js/tools.js?v={{ v }}"></script>
+    <!-- Loader (registers feature modules for app.js assembly) -->
+    <script src="/static/js/loader.js?v={{ v }}"></script>
     <!-- Feature modules (loaded before app.js) -->
     <script src="/static/js/features/sessions.js?v={{ v }}"></script>
     <script src="/static/js/features/chat.js?v={{ v }}"></script>

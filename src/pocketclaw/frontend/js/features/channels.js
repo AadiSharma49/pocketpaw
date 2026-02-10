@@ -13,6 +13,7 @@
 window.PocketPaw = window.PocketPaw || {};
 
 window.PocketPaw.Channels = {
+    name: 'Channels',
     /**
      * Get initial state for Channels
      */
@@ -20,6 +21,7 @@ window.PocketPaw.Channels = {
         return {
             showChannels: false,
             channelsTab: 'discord',
+            channelsMobileView: 'list',
             channelStatus: {
                 discord: { configured: false, running: false },
                 slack: { configured: false, running: false },
@@ -74,6 +76,58 @@ window.PocketPaw.Channels = {
                     webhooks: 'Webhooks'
                 };
                 return names[tab] || tab;
+            },
+
+            /**
+             * Lucide icon name for each channel
+             */
+            channelIcon(tab) {
+                const icons = {
+                    discord: 'gamepad-2',
+                    slack: 'hash',
+                    whatsapp: 'phone',
+                    telegram: 'send',
+                    signal: 'shield',
+                    matrix: 'grid-3x3',
+                    teams: 'users',
+                    google_chat: 'message-circle',
+                    webhooks: 'webhook'
+                };
+                return icons[tab] || 'circle';
+            },
+
+            /**
+             * Setup guide URL per channel
+             */
+            channelGuideUrl(tab) {
+                const urls = {
+                    discord: 'https://discord.com/developers/applications',
+                    slack: 'https://api.slack.com/apps',
+                    whatsapp: 'https://developers.facebook.com/apps/',
+                    telegram: 'https://t.me/BotFather',
+                    signal: 'https://github.com/bbernhard/signal-cli-rest-api',
+                    matrix: 'https://matrix.org/docs/guides/',
+                    teams: 'https://dev.botframework.com/',
+                    google_chat: 'https://developers.google.com/workspace/chat'
+                };
+                return urls[tab] || null;
+            },
+
+            /**
+             * Setup guide link label per channel
+             */
+            channelGuideLabel(tab) {
+                const labels = {
+                    discord: 'Discord Dev Portal',
+                    slack: 'Slack App Dashboard',
+                    whatsapp: 'Meta Dev Portal',
+                    telegram: '@BotFather',
+                    signal: 'signal-cli-rest-api',
+                    matrix: 'Matrix.org Docs',
+                    teams: 'Bot Framework',
+                    google_chat: 'Google Chat API'
+                };
+                return labels[tab] || 'Setup Guide';
             },
 
             /**
@@ -383,3 +437,5 @@ window.PocketPaw.Channels = {
         };
     }
 };
+
+window.PocketPaw.Loader.register('Channels', window.PocketPaw.Channels);

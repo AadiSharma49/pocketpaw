@@ -13,35 +13,9 @@
  */
 
 function app() {
-    // Assemble feature states
-    const featureStates = {
-        ...window.PocketPaw.Chat.getState(),
-        ...window.PocketPaw.FileBrowser.getState(),
-        ...window.PocketPaw.Reminders.getState(),
-        ...window.PocketPaw.Intentions.getState(),
-        ...window.PocketPaw.Skills.getState(),
-        ...window.PocketPaw.Transparency.getState(),
-        ...window.PocketPaw.RemoteAccess.getState(),
-        ...window.PocketPaw.MissionControl.getState(),
-        ...window.PocketPaw.Channels.getState(),
-        ...window.PocketPaw.MCP.getState(),
-        ...window.PocketPaw.Sessions.getState()
-    };
-
-    // Assemble feature methods
-    const featureMethods = {
-        ...window.PocketPaw.Chat.getMethods(),
-        ...window.PocketPaw.FileBrowser.getMethods(),
-        ...window.PocketPaw.Reminders.getMethods(),
-        ...window.PocketPaw.Intentions.getMethods(),
-        ...window.PocketPaw.Skills.getMethods(),
-        ...window.PocketPaw.Transparency.getMethods(),
-        ...window.PocketPaw.RemoteAccess.getMethods(),
-        ...window.PocketPaw.MissionControl.getMethods(),
-        ...window.PocketPaw.Channels.getMethods(),
-        ...window.PocketPaw.MCP.getMethods(),
-        ...window.PocketPaw.Sessions.getMethods()
-    };
+    // Assemble all registered feature modules via Loader
+    const { state: featureStates, methods: featureMethods } =
+        window.PocketPaw.Loader.assemble();
 
     return {
         // ==================== Core State ====================
@@ -57,12 +31,10 @@ function app() {
         settingsMobileView: 'list',
         settingsSections: [
             { id: 'general', label: 'General', icon: 'settings' },
-            { id: 'security', label: 'Security', icon: 'shield' },
-            { id: 'behavior', label: 'Behavior', icon: 'brain' },
-            { id: 'memory', label: 'Memory', icon: 'database' },
             { id: 'apikeys', label: 'API Keys', icon: 'key' },
-            { id: 'search', label: 'Search', icon: 'search' },
-            { id: 'services', label: 'Services', icon: 'puzzle' },
+            { id: 'behavior', label: 'Behavior & Safety', icon: 'brain' },
+            { id: 'memory', label: 'Memory', icon: 'database' },
+            { id: 'services', label: 'Search & Services', icon: 'search' },
             { id: 'system', label: 'System', icon: 'activity' },
         ],
 
@@ -314,112 +286,43 @@ function app() {
          * Handle settings from server (on connect)
          */
         handleSettings(data) {
-            if (data.content) {
-                const serverSettings = data.content;
-                // Apply server settings to frontend state
-                if (serverSettings.agentBackend) {
-                    this.settings.agentBackend = serverSettings.agentBackend;
-                }
-                if (serverSettings.llmProvider) {
-                    this.settings.llmProvider = serverSettings.llmProvider;
-                }
-                if (serverSettings.anthropicModel) {
-                    this.settings.anthropicModel = serverSettings.anthropicModel;
-                }
-                if (serverSettings.bypassPermissions !== undefined) {
-                    this.settings.bypassPermissions = serverSettings.bypassPermissions;
-                }
-                if (serverSettings.webSearchProvider) {
-                    this.settings.webSearchProvider = serverSettings.webSearchProvider;
-                }
-                if (serverSettings.urlExtractProvider) {
-                    this.settings.urlExtractProvider = serverSettings.urlExtractProvider;
-                }
-                if (serverSettings.injectionScanEnabled !== undefined) {
-                    this.settings.injectionScanEnabled = serverSettings.injectionScanEnabled;
-                }
-                if (serverSettings.injectionScanLlm !== undefined) {
-                    this.settings.injectionScanLlm = serverSettings.injectionScanLlm;
-                }
-                if (serverSettings.toolProfile) {
-                    this.settings.toolProfile = serverSettings.toolProfile;
-                }
-                if (serverSettings.planMode !== undefined) {
-                    this.settings.planMode = serverSettings.planMode;
-                }
-                if (serverSettings.planModeTools !== undefined) {
-                    this.settings.planModeTools = serverSettings.planModeTools;
-                }
-                if (serverSettings.smartRoutingEnabled !== undefined) {
-                    this.settings.smartRoutingEnabled = serverSettings.smartRoutingEnabled;
-                }
-                if (serverSettings.modelTierSimple) {
-                    this.settings.modelTierSimple = serverSettings.modelTierSimple;
-                }
-                if (serverSettings.modelTierModerate) {
-                    this.settings.modelTierModerate = serverSettings.modelTierModerate;
-                }
-                if (serverSettings.modelTierComplex) {
-                    this.settings.modelTierComplex = serverSettings.modelTierComplex;
-                }
-                if (serverSettings.ttsProvider) {
-                    this.settings.ttsProvider = serverSettings.ttsProvider;
-                }
-                if (serverSettings.ttsVoice !== undefined) {
-                    this.settings.ttsVoice = serverSettings.ttsVoice;
-                }
-                if (serverSettings.sttModel) {
-                    this.settings.sttModel = serverSettings.sttModel;
-                }
-                if (serverSettings.selfAuditEnabled !== undefined) {
-                    this.settings.selfAuditEnabled = serverSettings.selfAuditEnabled;
-                }
-                if (serverSettings.selfAuditSchedule) {
-                    this.settings.selfAuditSchedule = serverSettings.selfAuditSchedule;
-                }
-                if (serverSettings.memoryBackend) {
-                    this.settings.memoryBackend = serverSettings.memoryBackend;
-                }
-                if (serverSettings.mem0AutoLearn !== undefined) {
-                    this.settings.mem0AutoLearn = serverSettings.mem0AutoLearn;
-                }
-                if (serverSettings.mem0LlmProvider) {
-                    this.settings.mem0LlmProvider = serverSettings.mem0LlmProvider;
-                }
-                if (serverSettings.mem0LlmModel) {
-                    this.settings.mem0LlmModel = serverSettings.mem0LlmModel;
-                }
-                if (serverSettings.mem0EmbedderProvider) {
-                    this.settings.mem0EmbedderProvider = serverSettings.mem0EmbedderProvider;
-                }
-                if (serverSettings.mem0EmbedderModel) {
-                    this.settings.mem0EmbedderModel = serverSettings.mem0EmbedderModel;
-                }
-                if (serverSettings.mem0VectorStore) {
-                    this.settings.mem0VectorStore = serverSettings.mem0VectorStore;
-                }
-                if (serverSettings.mem0OllamaBaseUrl) {
-                    this.settings.mem0OllamaBaseUrl = serverSettings.mem0OllamaBaseUrl;
-                }
-                // Store API key availability (for UI feedback)
-                this.hasAnthropicKey = serverSettings.hasAnthropicKey || false;
-                this.hasOpenaiKey = serverSettings.hasOpenaiKey || false;
-                this.hasTavilyKey = serverSettings.hasTavilyKey || false;
-                this.hasBraveKey = serverSettings.hasBraveKey || false;
-                this.hasParallelKey = serverSettings.hasParallelKey || false;
-                this.hasElevenlabsKey = serverSettings.hasElevenlabsKey || false;
-                this.hasGoogleOAuthId = serverSettings.hasGoogleOAuthId || false;
-                this.hasGoogleOAuthSecret = serverSettings.hasGoogleOAuthSecret || false;
-                this.hasSpotifyClientId = serverSettings.hasSpotifyClientId || false;
-                this.hasSpotifyClientSecret = serverSettings.hasSpotifyClientSecret || false;
+            if (!data.content) return;
+            const s = data.content;
 
-                // Log agent status if available (for debugging)
-                if (serverSettings.agentStatus) {
-                    const status = serverSettings.agentStatus;
-                    this.log(`Agent: ${status.backend} (available: ${status.available})`, 'info');
-                    if (status.features && status.features.length > 0) {
-                        this.log(`Features: ${status.features.join(', ')}`, 'info');
-                    }
+            // Data-driven settings sync: map server keys to local settings
+            const SETTINGS_MAP = [
+                'agentBackend', 'llmProvider', 'anthropicModel',
+                'bypassPermissions', 'webSearchProvider', 'urlExtractProvider',
+                'injectionScanEnabled', 'injectionScanLlm', 'toolProfile',
+                'planMode', 'planModeTools', 'smartRoutingEnabled',
+                'modelTierSimple', 'modelTierModerate', 'modelTierComplex',
+                'ttsProvider', 'ttsVoice', 'sttModel',
+                'selfAuditEnabled', 'selfAuditSchedule',
+                'memoryBackend', 'mem0AutoLearn', 'mem0LlmProvider',
+                'mem0LlmModel', 'mem0EmbedderProvider', 'mem0EmbedderModel',
+                'mem0VectorStore', 'mem0OllamaBaseUrl'
+            ];
+            for (const key of SETTINGS_MAP) {
+                if (s[key] !== undefined) this.settings[key] = s[key];
+            }
+
+            // API key availability flags
+            const KEY_FLAGS = {
+                hasAnthropicKey: false, hasOpenaiKey: false,
+                hasTavilyKey: false, hasBraveKey: false,
+                hasParallelKey: false, hasElevenlabsKey: false,
+                hasGoogleOAuthId: false, hasGoogleOAuthSecret: false,
+                hasSpotifyClientId: false, hasSpotifyClientSecret: false
+            };
+            for (const flag of Object.keys(KEY_FLAGS)) {
+                this[flag] = s[flag] || false;
+            }
+
+            // Log agent status if available
+            if (s.agentStatus) {
+                this.log(`Agent: ${s.agentStatus.backend} (available: ${s.agentStatus.available})`, 'info');
+                if (s.agentStatus.features?.length > 0) {
+                    this.log(`Features: ${s.agentStatus.features.join(', ')}`, 'info');
                 }
             }
         },
@@ -515,6 +418,9 @@ function app() {
 
             this.log(`Saved ${provider} API key`, 'success');
             this.showToast(`${provider.charAt(0).toUpperCase() + provider.slice(1)} API key saved!`, 'success');
+
+            // Refresh settings from backend to confirm key was persisted
+            setTimeout(() => socket.send('get_settings'), 500);
         },
 
         /**

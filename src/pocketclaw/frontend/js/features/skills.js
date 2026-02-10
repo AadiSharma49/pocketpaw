@@ -13,6 +13,7 @@
 window.PocketPaw = window.PocketPaw || {};
 
 window.PocketPaw.Skills = {
+    name: 'Skills',
     /**
      * Get initial state for Skills
      */
@@ -106,3 +107,5 @@ window.PocketPaw.Skills = {
         };
     }
 };
+
+window.PocketPaw.Loader.register('Skills', window.PocketPaw.Skills);

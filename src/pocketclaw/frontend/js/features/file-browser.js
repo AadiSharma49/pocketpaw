@@ -13,6 +13,7 @@
 window.PocketPaw = window.PocketPaw || {};
 
 window.PocketPaw.FileBrowser = {
+    name: 'FileBrowser',
     /**
      * Get initial state for File Browser
      */
@@ -118,3 +119,5 @@ window.PocketPaw.FileBrowser = {
         };
     }
 };
+
+window.PocketPaw.Loader.register('FileBrowser', window.PocketPaw.FileBrowser);

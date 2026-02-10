@@ -213,7 +213,7 @@ INSTALLER_URL="https://raw.githubusercontent.com/pocketpaw/pocketpaw/dev/install
 printf '  Downloading installer...\n'
 if ! $DOWNLOAD "$INSTALLER_URL" > "$INSTALLER" 2>/dev/null; then
     printf '\033[33mWarn:\033[0m Primary download failed, trying fallback...\n'
-    FALLBACK_URL="https://raw.githubusercontent.com/pocketpaw/pocketpaw/dev/installer/installer.py"
+    FALLBACK_URL="https://raw.githubusercontent.com/pocketpaw/pocketpaw/main/installer/installer.py"
     if ! $DOWNLOAD "$FALLBACK_URL" > "$INSTALLER" 2>/dev/null; then
         printf '\033[31mError:\033[0m Could not download installer.\n'
         printf '       Try manually: %s\n' "$INSTALLER_URL"

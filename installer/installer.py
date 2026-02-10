@@ -24,6 +24,8 @@ from pathlib import Path
 
 VERSION = "0.2.0"
 PACKAGE = "pocketpaw"
+GIT_REPO = "https://github.com/pocketpaw/pocketpaw.git"
+GIT_BRANCH = "dev"
 CONFIG_DIR = Path.home() / ".pocketclaw"
 CONFIG_PATH = CONFIG_DIR / "config.json"
 
@@ -713,26 +715,34 @@ class InstallerUI:
 class PackageInstaller:
     """Build and run pip/uv install commands."""
 
-    def __init__(self, pip_cmd: str) -> None:
+    def __init__(self, pip_cmd: str, from_git: bool = False) -> None:
         self.pip_cmd = pip_cmd
+        self.from_git = from_git
+
+    def _build_pkg_spec(self, extras: list[str]) -> str:
+        """Build the package specifier, optionally pointing at git."""
+        extras_suffix = f"[{','.join(extras)}]" if extras else ""
+        if self.from_git:
+            return f"{PACKAGE}{extras_suffix} @ git+{GIT_REPO}@{GIT_BRANCH}"
+        return f"{PACKAGE}{extras_suffix}" if extras else PACKAGE
 
     def install(self, extras: list[str], upgrade: bool = False) -> bool:
         """Install pocketpaw with given extras. Returns True on success."""
-        if extras:
-            pkg = f"{PACKAGE}[{','.join(extras)}]"
-        else:
-            pkg = PACKAGE
+        pkg = self._build_pkg_spec(extras)
 
         # Prefer `uv tool install` — isolated venv, no sudo, no PEP 668
         if shutil.which("uv"):
-            ok = self._install_with_uv_tool(pkg, upgrade)
+            ok = self._install_with_uv_tool(pkg, extras, upgrade)
             if ok:
                 return True
 
-        # Fallback: pip install --user
+        # Fallback: pip-style install
         cmd_parts = self.pip_cmd.split() + ["install"]
         if not _in_virtualenv():
-            cmd_parts.append("--user")
+            if "uv" in self.pip_cmd:
+                cmd_parts.append("--system")
+            else:
+                cmd_parts.append("--user")
         if upgrade:
             cmd_parts.append("--upgrade")
         cmd_parts.append(pkg)
@@ -747,21 +757,28 @@ class PackageInstaller:
         if ok:
             return True
 
-        # PEP 668 retry: add --break-system-packages
-        if "externally-managed-environment" in stderr_text:
+        # PEP 668 retry (pip only — uv doesn't need this)
+        if "uv" not in self.pip_cmd and "externally-managed-environment" in stderr_text:
             return self._retry_with_pep668_workaround(cmd_parts, pkg)
 
         return False
 
-    def _install_with_uv_tool(self, pkg: str, upgrade: bool) -> bool:
+    def _install_with_uv_tool(
+        self, pkg: str, extras: list[str], upgrade: bool
+    ) -> bool:
         """Install using `uv tool install` — isolated venv in ~/.local/share/uv/tools/."""
         cmd = ["uv", "tool", "install"]
         if upgrade:
             cmd.append("--upgrade")
         else:
-            # --force allows reinstall if already present
             cmd.append("--force")
-        cmd.append(pkg)
+        if self.from_git:
+            # uv tool install needs --from for git sources
+            extras_suffix = f"[{','.join(extras)}]" if extras else ""
+            cmd.extend(["--from", f"{PACKAGE}{extras_suffix} @ git+{GIT_REPO}@{GIT_BRANCH}"])
+            cmd.append(PACKAGE)
+        else:
+            cmd.append(pkg)
 
         if _HAS_RICH and console:
             with console.status(f"[bold cyan]Installing {pkg} (uv tool)...[/bold cyan]"):
@@ -877,11 +894,14 @@ class ConfigWriter:
 class PocketPawInstaller:
     """Main installer orchestrating all steps."""
 
-    def __init__(self, pip_cmd: str = "", non_interactive: bool = False) -> None:
+    def __init__(
+        self, pip_cmd: str = "", non_interactive: bool = False, from_git: bool = False
+    ) -> None:
         self.system = SystemCheck(pip_cmd)
         self.ui = InstallerUI()
         self.config_writer = ConfigWriter()
         self.non_interactive = non_interactive
+        self.from_git = from_git
 
         # Collected state
         self.profile = "recommended"
@@ -1010,7 +1030,7 @@ class PocketPawInstaller:
 
     def _do_install(self, launch: bool | None = None) -> int:
         """Execute the installation."""
-        pkg_installer = PackageInstaller(self.pip_cmd)
+        pkg_installer = PackageInstaller(self.pip_cmd, from_git=self.from_git)
 
         # Install package
         upgrade = self.system_info is not None and self.system_info.existing_version is not None
@@ -1160,6 +1180,11 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Hint that uv is on PATH (passed by install.sh)",
     )
+    parser.add_argument(
+        "--from-git",
+        action="store_true",
+        help="Install from the dev branch on GitHub instead of PyPI",
+    )
     return parser
 
 
@@ -1173,6 +1198,7 @@ def main() -> None:
     installer = PocketPawInstaller(
         pip_cmd=args.pip_cmd,
         non_interactive=args.non_interactive,
+        from_git=args.from_git,
     )
     exit_code = installer.run(args)
     sys.exit(exit_code)

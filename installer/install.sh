@@ -221,14 +221,14 @@ fi
 printf '  Launching interactive installer...\n\n'
 
 # ── Run installer ──────────────────────────────────────────────────────
-UV_FLAG=""
+EXTRA_FLAGS="--from-git"
 if [ "$UV_AVAILABLE" = "1" ]; then
-    UV_FLAG="--uv-available"
+    EXTRA_FLAGS="$EXTRA_FLAGS --uv-available"
 fi
 
 # Restore stdin from terminal (stdin is exhausted when piped via curl|sh)
 if [ ! -t 0 ] && [ -e /dev/tty ]; then
-    "$PYTHON" "$INSTALLER" --pip-cmd "$PIP_CMD" $UV_FLAG "$@" < /dev/tty
+    "$PYTHON" "$INSTALLER" --pip-cmd "$PIP_CMD" $EXTRA_FLAGS "$@" < /dev/tty
 else
-    "$PYTHON" "$INSTALLER" --pip-cmd "$PIP_CMD" $UV_FLAG "$@"
+    "$PYTHON" "$INSTALLER" --pip-cmd "$PIP_CMD" $EXTRA_FLAGS "$@"
 fi

@@ -36,6 +36,7 @@ class AgentContextBuilder:
         user_query: str | None = None,
         channel: Channel | None = None,
         sender_id: str | None = None,
+        session_key: str | None = None,
     ) -> str:
         """Build the complete system prompt.
 
@@ -44,6 +45,7 @@ class AgentContextBuilder:
             user_query: Current user message for semantic memory search (mem0).
             channel: Target channel for format-aware hints.
             sender_id: Sender identifier for memory scoping and identity injection.
+            session_key: Current session key for session management tools.
         """
         # 1. Load static identity
         context = await self.bootstrap.get_context()
@@ -92,5 +94,14 @@ class AgentContextBuilder:
             hint = CHANNEL_FORMAT_HINTS.get(channel, "")
             if hint:
                 parts.append(f"\n# Response Format\n{hint}")
+
+        # 5. Inject session key for session management tools
+        if session_key:
+            parts.append(
+                f"\n# Session Management\n"
+                f"Current session_key: {session_key}\n"
+                f"Pass this value to any session tool (new_session, list_sessions, "
+                f"switch_session, clear_session, rename_session, delete_session)."
+            )
 
         return "\n\n".join(parts)

@@ -362,6 +362,12 @@ class Settings(BaseSettings):
         default=50, description="Max media file size in MB (0 = unlimited)"
     )
 
+    # UX
+    welcome_hint_enabled: bool = Field(
+        default=True,
+        description="Send a one-time welcome hint on first interaction in non-web channels",
+    )
+
     # Concurrency
     max_concurrent_conversations: int = Field(
         default=5, description="Max parallel conversations processed simultaneously"
@@ -516,6 +522,8 @@ class Settings(BaseSettings):
             # Media Downloads
             "media_download_dir": self.media_download_dir,
             "media_max_file_size_mb": self.media_max_file_size_mb,
+            # UX
+            "welcome_hint_enabled": self.welcome_hint_enabled,
             # Concurrency
             "max_concurrent_conversations": self.max_concurrent_conversations,
         }

@@ -248,6 +248,7 @@ class TestLoopThinkingIntegration:
             mem.add_to_session = AsyncMock()
             mem.get_session_history = AsyncMock(return_value=[])
             mem.get_compacted_history = AsyncMock(return_value=[])
+            mem.resolve_session_key = AsyncMock(side_effect=lambda k: k)
             mock_mem_fn.return_value = mem
             mock_builder_cls.return_value.build_system_prompt = AsyncMock(
                 return_value="System Prompt"
@@ -310,6 +311,7 @@ class TestLoopThinkingIntegration:
             mem.add_to_session = AsyncMock()
             mem.get_session_history = AsyncMock(return_value=[])
             mem.get_compacted_history = AsyncMock(return_value=[])
+            mem.resolve_session_key = AsyncMock(side_effect=lambda k: k)
             mock_mem_fn.return_value = mem
             mock_builder_cls.return_value.build_system_prompt = AsyncMock(
                 return_value="System Prompt"

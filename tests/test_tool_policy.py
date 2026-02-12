@@ -22,9 +22,19 @@ class TestToolGroups:
 class TestProfileResolution:
     """Test ToolPolicy.resolve_profile()."""
 
-    def test_minimal_profile_only_memory(self):
+    def test_minimal_profile_memory_and_sessions(self):
         result = ToolPolicy.resolve_profile("minimal")
-        assert result == {"remember", "recall", "forget"}
+        assert result == {
+            "remember",
+            "recall",
+            "forget",
+            "new_session",
+            "list_sessions",
+            "switch_session",
+            "clear_session",
+            "rename_session",
+            "delete_session",
+        }
 
     def test_coding_profile_includes_fs_shell_memory(self):
         result = ToolPolicy.resolve_profile("coding")

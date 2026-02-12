@@ -53,6 +53,12 @@ _LAZY_IMPORTS: dict[str, tuple[str, str]] = {
     "RedditSearchTool": (".reddit", "RedditSearchTool"),
     "RedditReadTool": (".reddit", "RedditReadTool"),
     "RedditTrendingTool": (".reddit", "RedditTrendingTool"),
+    "NewSessionTool": (".sessions", "NewSessionTool"),
+    "ListSessionsTool": (".sessions", "ListSessionsTool"),
+    "SwitchSessionTool": (".sessions", "SwitchSessionTool"),
+    "ClearSessionTool": (".sessions", "ClearSessionTool"),
+    "RenameSessionTool": (".sessions", "RenameSessionTool"),
+    "DeleteSessionTool": (".sessions", "DeleteSessionTool"),
 }
 
 

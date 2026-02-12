@@ -44,6 +44,14 @@ TOOL_GROUPS: dict[str, list[str]] = {
     ],
     "group:media": ["image_generate", "ocr"],
     "group:reddit": ["reddit_search", "reddit_read", "reddit_trending"],
+    "group:sessions": [
+        "new_session",
+        "list_sessions",
+        "switch_session",
+        "clear_session",
+        "rename_session",
+        "delete_session",
+    ],
     "group:mcp": [],  # Placeholder — MCP tools are dynamic per server
 }
 
@@ -52,7 +60,7 @@ TOOL_GROUPS: dict[str, list[str]] = {
 # ---------------------------------------------------------------------------
 TOOL_PROFILES: dict[str, dict] = {
     "minimal": {
-        "allow": ["group:memory"],
+        "allow": ["group:memory", "group:sessions"],
     },
     "coding": {
         "allow": ["group:fs", "group:shell", "group:memory"],

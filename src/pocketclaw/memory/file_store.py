@@ -174,6 +174,7 @@ class FileMemoryStore:
         self._index: dict[str, MemoryEntry] = {}
         self._session_write_locks: dict[str, asyncio.Lock] = {}
         self._session_index_lock = asyncio.Lock()  # Protects _index.json read-modify-write
+        self._alias_lock = asyncio.Lock()  # Protects _aliases.json read-modify-write
         self._load_index()
 
         # Build session index on first run (migration)
@@ -203,6 +204,78 @@ class FileMemoryStore:
         tmp = self._index_path.with_suffix(".tmp")
         tmp.write_text(json.dumps(index, indent=2), encoding="utf-8")
         tmp.replace(self._index_path)
+
+    # =========================================================================
+    # Session Aliases
+    # =========================================================================
+
+    @property
+    def _aliases_path(self) -> Path:
+        """Path to the session aliases file."""
+        return self.sessions_path / "_aliases.json"
+
+    def _load_aliases(self) -> dict[str, str]:
+        """Read session aliases from disk. Returns empty dict if missing/corrupt."""
+        if not self._aliases_path.exists():
+            return {}
+        try:
+            return json.loads(self._aliases_path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            return {}
+
+    def _save_aliases(self, aliases: dict[str, str]) -> None:
+        """Atomic write of aliases file (write to .tmp then rename)."""
+        tmp = self._aliases_path.with_suffix(".tmp")
+        tmp.write_text(json.dumps(aliases, indent=2), encoding="utf-8")
+        tmp.replace(self._aliases_path)
+
+    async def resolve_session_alias(self, session_key: str) -> str:
+        """Resolve a session key through the alias table.
+
+        Returns the aliased target key if one exists, otherwise the original key.
+        """
+        async with self._alias_lock:
+            aliases = self._load_aliases()
+        return aliases.get(session_key, session_key)
+
+    async def set_session_alias(self, source_key: str, target_key: str) -> None:
+        """Set or overwrite a session alias (source_key -> target_key)."""
+        async with self._alias_lock:
+            aliases = self._load_aliases()
+            aliases[source_key] = target_key
+            self._save_aliases(aliases)
+
+    async def remove_session_alias(self, source_key: str) -> bool:
+        """Remove a session alias. Returns True if it existed."""
+        async with self._alias_lock:
+            aliases = self._load_aliases()
+            if source_key not in aliases:
+                return False
+            del aliases[source_key]
+            self._save_aliases(aliases)
+            return True
+
+    async def get_session_keys_for_chat(self, source_key: str) -> list[str]:
+        """Return all session keys associated with this source key.
+
+        Includes the current alias target (if any) plus all historical
+        target keys where source matches.
+        """
+        async with self._alias_lock:
+            aliases = self._load_aliases()
+
+        keys: list[str] = []
+        for src, tgt in aliases.items():
+            if src == source_key:
+                keys.append(tgt)
+
+        # Also include the source_key itself (the default/unaliased session)
+        safe_default = source_key.replace(":", "_").replace("/", "_")
+        default_file = self.sessions_path / f"{safe_default}.json"
+        if default_file.exists() and source_key not in keys:
+            keys.append(source_key)
+
+        return keys
 
     async def _update_session_index(
         self, session_key: str, entry: MemoryEntry, session_data: list[dict]

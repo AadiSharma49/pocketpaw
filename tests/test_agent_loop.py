@@ -25,6 +25,7 @@ def mock_memory():
     mem.add_to_session = AsyncMock()
     mem.get_session_history = AsyncMock(return_value=[])
     mem.get_compacted_history = AsyncMock(return_value=[])
+    mem.resolve_session_key = AsyncMock(side_effect=lambda k: k)
     return mem
 
 

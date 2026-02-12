@@ -610,6 +610,80 @@ class MemoryManager:
         """Clear session history."""
         return await self._store.clear_session(session_key)
 
+    async def delete_session(self, session_key: str) -> bool:
+        """Delete a session entirely (file, compaction cache, index entry)."""
+        if hasattr(self._store, "delete_session"):
+            return await self._store.delete_session(session_key)
+        # Fallback: clear is the best we can do
+        count = await self._store.clear_session(session_key)
+        return count > 0
+
+    async def update_session_title(self, session_key: str, title: str) -> bool:
+        """Update a session's title in the index."""
+        if hasattr(self._store, "update_session_title"):
+            return await self._store.update_session_title(session_key, title)
+        return False
+
+    # =========================================================================
+    # Session Aliases (pass-through for file store)
+    # =========================================================================
+
+    async def resolve_session_key(self, session_key: str) -> str:
+        """Resolve a session key through the alias table.
+
+        Returns the aliased target if one exists, otherwise the original key.
+        Only works with stores that support aliases (FileMemoryStore).
+        """
+        if hasattr(self._store, "resolve_session_alias"):
+            return await self._store.resolve_session_alias(session_key)
+        return session_key
+
+    async def set_session_alias(self, source_key: str, target_key: str) -> None:
+        """Set a session alias (source_key -> target_key)."""
+        if hasattr(self._store, "set_session_alias"):
+            await self._store.set_session_alias(source_key, target_key)
+
+    async def list_sessions_for_chat(self, session_key: str) -> list[dict]:
+        """List all sessions associated with a chat, sorted by last_activity desc.
+
+        Returns list of dicts with keys: session_key, title, last_activity,
+        message_count, preview, is_active.
+        """
+        if not hasattr(self._store, "get_session_keys_for_chat"):
+            return []
+
+        keys = await self._store.get_session_keys_for_chat(session_key)
+
+        # Load session index metadata
+        if not hasattr(self._store, "_load_session_index"):
+            return []
+
+        index = self._store._load_session_index()
+
+        # Find which key is currently active (aliased target)
+        active_key = session_key
+        if hasattr(self._store, "resolve_session_alias"):
+            active_key = await self._store.resolve_session_alias(session_key)
+
+        sessions = []
+        for key in keys:
+            safe_key = key.replace(":", "_").replace("/", "_")
+            meta = index.get(safe_key, {})
+            sessions.append(
+                {
+                    "session_key": key,
+                    "title": meta.get("title", "New Chat"),
+                    "last_activity": meta.get("last_activity", ""),
+                    "message_count": meta.get("message_count", 0),
+                    "preview": meta.get("preview", ""),
+                    "is_active": key == active_key,
+                }
+            )
+
+        # Sort by last_activity descending (most recent first)
+        sessions.sort(key=lambda s: s["last_activity"], reverse=True)
+        return sessions
+
 
 # Singleton
 _manager: MemoryManager | None = None

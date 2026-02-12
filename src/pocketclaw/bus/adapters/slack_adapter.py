@@ -67,6 +67,42 @@ class SlackAdapter(BaseChannelAdapter):
                 return
             await adapter._handle_slack_event(event)
 
+        # Register native slash commands so Slack doesn't swallow /cmd
+        # messages with "command not found".  These arrive via Socket Mode
+        # and are forwarded to the bus as InboundMessage with command text.
+        # NOTE: Each command must also be registered in the Slack App
+        # manifest at api.slack.com → Slash Commands for this to work.
+        for _cmd_name in (
+            "/new",
+            "/sessions",
+            "/resume",
+            "/clear",
+            "/rename",
+            "/status",
+            "/delete",
+            "/help",
+        ):
+
+            @app.command(_cmd_name)
+            async def _slash_handler(ack, command, _cmd=_cmd_name):
+                await ack()
+                text = command.get("text", "").strip()
+                content = f"{_cmd} {text}" if text else _cmd
+                ch_id = command.get("channel_id", "")
+                user = command.get("user_id", "")
+                thread_ts = command.get("thread_ts")
+                meta: dict[str, Any] = {"channel_id": ch_id}
+                if thread_ts:
+                    meta["thread_ts"] = thread_ts
+                msg = InboundMessage(
+                    channel=Channel.SLACK,
+                    sender_id=user,
+                    chat_id=ch_id,
+                    content=content,
+                    metadata=meta,
+                )
+                await adapter._publish_inbound(msg)
+
         self._slack_app = app
         self._handler = AsyncSocketModeHandler(app, self.app_token)
         self._handler_task = asyncio.create_task(self._handler.start_async())

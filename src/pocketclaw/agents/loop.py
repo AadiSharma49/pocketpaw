@@ -20,6 +20,8 @@ import logging
 from pocketclaw.agents.router import AgentRouter
 from pocketclaw.bootstrap import AgentContextBuilder
 from pocketclaw.bus import InboundMessage, OutboundMessage, SystemEvent, get_message_bus
+from pocketclaw.bus.commands import get_command_handler
+from pocketclaw.bus.events import Channel
 from pocketclaw.config import Settings, get_settings
 from pocketclaw.memory import get_memory_manager
 from pocketclaw.security.injection_scanner import ThreatLevel, get_injection_scanner
@@ -108,24 +110,60 @@ class AgentLoop:
         session_key = message.session_key
         logger.info(f"⚡ Processing message from {session_key}")
 
+        # Resolve alias so two chats aliased to the same session serialize correctly
+        resolved_key = await self.memory.resolve_session_key(session_key)
+
         # Global concurrency limit — blocks until a slot is available
         async with self._global_semaphore:
             # Per-session lock — serializes messages within the same session
-            if session_key not in self._session_locks:
-                self._session_locks[session_key] = asyncio.Lock()
-            lock = self._session_locks[session_key]
+            if resolved_key not in self._session_locks:
+                self._session_locks[resolved_key] = asyncio.Lock()
+            lock = self._session_locks[resolved_key]
             async with lock:
-                await self._process_message_inner(message, session_key)
+                await self._process_message_inner(message, resolved_key)
 
             # Clean up lock if no one else is waiting on it
             if not lock.locked():
-                self._session_locks.pop(session_key, None)
+                self._session_locks.pop(resolved_key, None)
+
+    _WELCOME_EXCLUDED = frozenset({Channel.WEBSOCKET, Channel.CLI, Channel.SYSTEM})
 
     async def _process_message_inner(self, message: InboundMessage, session_key: str) -> None:
         """Inner message processing (called under concurrency guards)."""
         # Keep context_builder in sync if memory manager was hot-reloaded
         if self.context_builder.memory is not self.memory:
             self.context_builder.memory = self.memory
+
+        # Command interception — handle /new, /sessions, /resume, /help
+        # before any agent processing or memory storage
+        cmd_handler = get_command_handler()
+        if cmd_handler.is_command(message.content):
+            response = await cmd_handler.handle(message)
+            if response is not None:
+                await self.bus.publish_outbound(response)
+                await self.bus.publish_outbound(
+                    OutboundMessage(
+                        channel=message.channel,
+                        chat_id=message.chat_id,
+                        content="",
+                        is_stream_end=True,
+                    )
+                )
+                return
+
+        # Welcome hint — one-time message on first interaction in a channel
+        if self.settings.welcome_hint_enabled and message.channel not in self._WELCOME_EXCLUDED:
+            existing = await self.memory.get_session_history(session_key, limit=1)
+            if not existing:
+                await self.bus.publish_outbound(
+                    OutboundMessage(
+                        channel=message.channel,
+                        chat_id=message.chat_id,
+                        content=(
+                            "Welcome to PocketPaw! Type /help (or !help) to see available commands."
+                        ),
+                    )
+                )
 
         try:
             # 0. Injection scan for non-owner sources
@@ -180,7 +218,10 @@ class AgentLoop:
             # 2. Build dynamic system prompt (identity + memory context + channel hint)
             sender_id = message.sender_id
             system_prompt = await self.context_builder.build_system_prompt(
-                user_query=content, channel=message.channel, sender_id=sender_id
+                user_query=content,
+                channel=message.channel,
+                sender_id=sender_id,
+                session_key=message.session_key,
             )
 
             # 2a. Retrieve session history with compaction

@@ -74,6 +74,7 @@ async def test_session_lock_serialises_same_session(
     mem = MagicMock()
     mem.add_to_session = AsyncMock()
     mem.get_compacted_history = AsyncMock(return_value=[])
+    mem.resolve_session_key = AsyncMock(side_effect=lambda k: k)
     mock_get_mem.return_value = mem
 
     ctx = MagicMock()
@@ -153,6 +154,7 @@ async def test_cross_session_runs_in_parallel(
     mem = MagicMock()
     mem.add_to_session = AsyncMock()
     mem.get_compacted_history = AsyncMock(return_value=[])
+    mem.resolve_session_key = AsyncMock(side_effect=lambda k: k)
     mock_get_mem.return_value = mem
 
     ctx = MagicMock()
@@ -235,6 +237,7 @@ async def test_global_semaphore_caps_concurrency(
     mem = MagicMock()
     mem.add_to_session = AsyncMock()
     mem.get_compacted_history = AsyncMock(return_value=[])
+    mem.resolve_session_key = AsyncMock(side_effect=lambda k: k)
     mock_get_mem.return_value = mem
 
     ctx = MagicMock()

@@ -56,6 +56,9 @@ class TelegramAdapter(BaseChannelAdapter):
 
         # Add Handlers
         self.app.add_handler(CommandHandler("start", self._handle_start))
+        _cmds = ("new", "sessions", "resume", "clear", "rename", "status", "delete", "help")
+        for cmd_name in _cmds:
+            self.app.add_handler(CommandHandler(cmd_name, self._handle_command))
         media_filter = (
             filters.PHOTO
             | filters.Document.ALL
@@ -74,6 +77,26 @@ class TelegramAdapter(BaseChannelAdapter):
 
         # Start polling (non-blocking)
         await self.app.updater.start_polling(drop_pending_updates=True)
+
+        # Set bot menu commands for autocomplete in Telegram UI
+        try:
+            from telegram import BotCommand
+
+            await self.app.bot.set_my_commands(
+                [
+                    BotCommand("new", "Start a fresh conversation"),
+                    BotCommand("sessions", "List your conversation sessions"),
+                    BotCommand("resume", "Resume a previous session"),
+                    BotCommand("clear", "Clear session history"),
+                    BotCommand("rename", "Rename the current session"),
+                    BotCommand("status", "Show session info"),
+                    BotCommand("delete", "Delete the current session"),
+                    BotCommand("help", "Show available commands"),
+                ]
+            )
+        except Exception as e:
+            logger.warning("Failed to set Telegram bot commands: %s", e)
+
         logger.info("📡 Telegram Adapter started")
 
     async def _on_stop(self) -> None:
@@ -254,6 +277,32 @@ class TelegramAdapter(BaseChannelAdapter):
             "🐾 **PocketPaw**\n\nI am listening. Just type to chat!",
             parse_mode="Markdown",
         )
+
+    async def _handle_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Handle /new, /sessions, /resume, /help by forwarding to the bus."""
+        if not update.effective_user or not update.message:
+            return
+
+        user_id = update.effective_user.id
+        if self.allowed_user_id and user_id != self.allowed_user_id:
+            return
+
+        # Reconstruct the full command text (e.g. "/resume 3")
+        text = update.message.text or ""
+
+        # Build topic-aware chat_id for forum groups
+        base_chat_id = str(update.effective_chat.id)
+        topic_id = getattr(update.message, "message_thread_id", None)
+        chat_id = f"{base_chat_id}:topic:{topic_id}" if topic_id else base_chat_id
+
+        msg = InboundMessage(
+            channel=Channel.TELEGRAM,
+            sender_id=str(user_id),
+            chat_id=chat_id,
+            content=text,
+            metadata={"username": update.effective_user.username},
+        )
+        await self._publish_inbound(msg)
 
     async def _handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Forward message to Bus, downloading any attached media."""

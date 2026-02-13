@@ -1133,7 +1133,7 @@ async def webhook_inbound(
     sig_header = request.headers.get("X-Webhook-Signature", "")
 
     authed = False
-    if secret_header and secret_header == slot.secret:
+    if secret_header and hmac.compare_digest(secret_header, slot.secret):
         authed = True
     elif sig_header.startswith("sha256="):
         expected = hmac.new(slot.secret.encode(), raw_body, hashlib.sha256).hexdigest()

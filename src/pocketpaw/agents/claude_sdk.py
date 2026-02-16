@@ -659,9 +659,9 @@ class ClaudeAgentSDK:
             # the SDK speaks Anthropic Messages API, but Gemini/OpenAI
             # endpoints speak the OpenAI Chat Completions API format.
             if llm.is_gemini:
-                yield {
-                    "type": "error",
-                    "content": (
+                yield AgentEvent(
+                    type="error",
+                    content=(
                         "❌ Gemini is not compatible with the **Claude Agent SDK** "
                         "backend.\n\n"
                         "The Claude SDK uses the Anthropic Messages API format, "
@@ -670,7 +670,7 @@ class ClaudeAgentSDK:
                         "**Settings → General → Agent Backend**. "
                         "PocketPaw Native fully supports Gemini."
                     ),
-                }
+                )
                 return
 
             # Smart model routing — classify BEFORE prompt composition so we

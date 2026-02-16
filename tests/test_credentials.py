@@ -468,6 +468,7 @@ class TestSecretFieldsList:
             "teams_app_id",
             "teams_app_password",
             "gchat_service_account_key",
+            "sarvam_api_key",
         }
         assert SECRET_FIELDS == expected
 

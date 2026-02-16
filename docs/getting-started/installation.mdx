@@ -38,7 +38,11 @@ sh : The term 'sh' is not recognized as the name of a cmdlet...
 1. Use PowerShell-specific script (if available):
 
 ```powershell
-iwr -useb https://pocketpaw.xyz/install.ps1 | iex
+# Set execution policy to allow scripts
+Set-ExecutionPolicy RemoteSigned -Scope CurrentUser
+
+# Run PocketPaw installer
+powershell -NoExit -Command "iwr -useb https://pocketpaw.xyz/install.ps1 | iex"
 ```
 
 2. Use **Git Bash** or **WSL** to run the original Unix install script.

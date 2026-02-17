@@ -12,7 +12,7 @@
  * Changes (2026-02-05):
  * - MAJOR REFACTOR: Componentized into feature modules using mixin pattern
  * - Extracted features to js/features/: chat, file-browser, reminders, intentions,
- *   skills, transparency, remote-access, mission-control
+ *   skills, transparency, remote-access, mc-agents, mc-tasks, deep-work, mc-events
  * - This file now serves as the core assembler for feature modules
  * - Core functionality: init, WebSocket setup, settings, status, tools, logging
  *
@@ -261,6 +261,10 @@ function app() {
          * Connects WebSocket, loads sessions, sets up keyboard shortcuts.
          */
         _startApp() {
+            // Wire EventBus listeners (cross-module communication)
+            PocketPaw.EventBus.on('sidebar:files', (data) => this.handleSidebarFiles(data));
+            PocketPaw.EventBus.on('output:files', (data) => this.handleOutputFiles(data));
+
             // Register event handlers first
             this.setupSocketHandlers();
 

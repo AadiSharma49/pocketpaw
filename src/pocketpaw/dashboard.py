@@ -2234,6 +2234,12 @@ async def websocket_endpoint(
             elif action == "settings":
                 async with _settings_lock:
                     settings.agent_backend = data.get("agent_backend", settings.agent_backend)
+                    if "claude_sdk_model" in data:
+                        settings.claude_sdk_model = data["claude_sdk_model"]
+                    if "claude_sdk_max_turns" in data:
+                        val = data["claude_sdk_max_turns"]
+                        if isinstance(val, (int, float)) and 1 <= val <= 200:
+                            settings.claude_sdk_max_turns = int(val)
                     settings.llm_provider = data.get("llm_provider", settings.llm_provider)
                     if data.get("ollama_host"):
                         settings.ollama_host = data["ollama_host"]
@@ -2444,6 +2450,8 @@ async def websocket_endpoint(
                         "type": "settings",
                         "content": {
                             "agentBackend": settings.agent_backend,
+                            "claudeSdkModel": settings.claude_sdk_model,
+                            "claudeSdkMaxTurns": settings.claude_sdk_max_turns,
                             "llmProvider": settings.llm_provider,
                             "ollamaHost": settings.ollama_host,
                             "ollamaModel": settings.ollama_model,

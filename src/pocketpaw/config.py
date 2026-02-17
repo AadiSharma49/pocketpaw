@@ -99,6 +99,16 @@ class Settings(BaseSettings):
         description="Agent backend: 'claude_agent_sdk' (recommended), 'pocketpaw_native', or 'open_interpreter' (experimental)",
     )
 
+    # Claude Agent SDK Settings
+    claude_sdk_model: str = Field(
+        default="",
+        description="Model for Claude SDK backend (empty = let Claude Code auto-select)",
+    )
+    claude_sdk_max_turns: int = Field(
+        default=25,
+        description="Max tool-use turns per query in Claude SDK (safety net against runaway loops)",
+    )
+
     # LLM Configuration
     llm_provider: str = Field(
         default="auto",
@@ -284,7 +294,11 @@ class Settings(BaseSettings):
 
     # Smart Model Routing
     smart_routing_enabled: bool = Field(
-        default=True, description="Enable automatic model selection based on task complexity"
+        default=False,
+        description=(
+            "Enable automatic model selection based on task complexity"
+            " (may conflict with Claude Code's own routing)"
+        ),
     )
     model_tier_simple: str = Field(
         default="claude-haiku-4-5-20251001", description="Model for simple tasks (greetings, facts)"
@@ -475,6 +489,8 @@ class Settings(BaseSettings):
             "telegram_bot_token": self.telegram_bot_token or existing.get("telegram_bot_token"),
             "allowed_user_id": self.allowed_user_id or existing.get("allowed_user_id"),
             "agent_backend": self.agent_backend,
+            "claude_sdk_model": self.claude_sdk_model,
+            "claude_sdk_max_turns": self.claude_sdk_max_turns,
             "memory_backend": self.memory_backend,
             "memory_use_inference": self.memory_use_inference,
             "mem0_llm_provider": self.mem0_llm_provider,

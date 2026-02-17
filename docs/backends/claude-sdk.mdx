@@ -49,6 +49,7 @@ The Claude Agent SDK provides these tools natively:
 | `Read` | Read files from the filesystem |
 | `Write` | Write/create files |
 | `Edit` | Edit existing files with search/replace |
+| `Skill` | Execute skills from SKILL.md files |
 
 ### Tool Name Mapping
 
@@ -60,6 +61,7 @@ The SDK uses capitalized tool names internally. PocketPaw maps these to the poli
 | `Read` | `read_file` |
 | `Write` | `write_file` |
 | `Edit` | `edit_file` |
+| `Skill` | `skill` |
 
 This mapping is handled by `_SDK_TO_POLICY` in `claude_sdk.py`.
 
@@ -99,6 +101,15 @@ export POCKETPAW_TOOLS_DENY="group:mcp"
 ## Custom Tools
 
 In addition to the SDK's built-in tools, PocketPaw registers its own tools (web_search, image_gen, etc.) as custom tool definitions passed to the SDK.
+
+## Skill Auto-Discovery
+
+The backend passes `setting_sources=["user", "project"]` to the SDK, enabling automatic discovery of SKILL.md files from:
+
+- `~/.claude/skills/` — User-level skills
+- `.claude/skills/` — Project-level skills
+
+This means skills created by the `skill_gen` tool (which writes to `~/.claude/skills/`) are automatically available to the SDK without additional configuration.
 
 ## Response Format
 

@@ -2,6 +2,10 @@
  * PocketPaw Main Application
  * Alpine.js component for the dashboard
  *
+ * Changes (2026-02-17):
+ * - Health reconnect hook: re-fetch health data on WS reconnect
+ * - Added health_update socket handler and get_health on connect
+ *
  * Changes (2026-02-12):
  * - Call initHashRouter() in init() for hash-based URL routing
  *
@@ -332,6 +336,10 @@ function app() {
                 socket.send('get_reminders');
                 socket.send('get_intentions');
                 socket.send('get_skills');
+                socket.send('get_health');
+
+                // Re-fetch full health data if modal is open (handles server restart)
+                if (this.onHealthReconnect) this.onHealthReconnect();
 
                 // Resume last session if WS connect didn't handle it via query param
                 const lastSession = StateManager.load('lastSession');
@@ -392,6 +400,9 @@ function app() {
             // Transparency handlers
             socket.on('connection_info', (data) => this.handleConnectionInfo(data));
             socket.on('system_event', (data) => this.handleSystemEvent(data));
+
+            // Health
+            socket.on('health_update', (data) => this.handleHealthUpdate(data));
 
             // Session handlers
             socket.on('session_history', (data) => this.handleSessionHistory(data));

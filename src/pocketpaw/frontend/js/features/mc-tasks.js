@@ -49,12 +49,12 @@ window.PocketPaw.McTasks = {
                 expandedTaskId: null,          // which task row is expanded
                 taskViewMode: 'list',          // 'list' | 'timeline'
                 taskDeliverableCache: {},      // {task_id: [documents...]} for inline preview
-                // Computed cache state
-                _taskMapCache: null,           // {task_id: task} lookup, invalidated on task changes
-                _taskMapVersion: 0,            // incremented when tasks change
-                _levelsCacheVersion: -1,       // version at which levels cache was built
-                _levelsCache: null,            // cached getTasksByLevel result
-            }
+            },
+            // Computed cache (top-level — methods access these as this._taskMapCache etc.)
+            _taskMapCache: null,           // {task_id: task} lookup, invalidated on task changes
+            _taskMapVersion: 0,            // incremented when tasks change
+            _levelsCacheVersion: -1,       // version at which levels cache was built
+            _levelsCache: null,            // cached getTasksByLevel result
         };
     },
 

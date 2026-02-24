@@ -1,6 +1,6 @@
 # Tests for API key system.
 # Created: 2026-02-20
-
+import os
 import tempfile
 from pathlib import Path
 
@@ -131,6 +131,10 @@ class TestAPIKeyManager:
         )
         assert manager.verify(plaintext) is None
 
+    @pytest.mark.skipif(
+    os.name == "nt",
+    reason="Windows NTFS does not enforce POSIX 0600 permissions",
+)    
     def test_file_permissions(self, manager):
         import os
 

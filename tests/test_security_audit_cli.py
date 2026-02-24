@@ -30,7 +30,7 @@ def temp_config_dir():
     with tempfile.TemporaryDirectory() as tmpdir:
         yield Path(tmpdir)
 
-
+@pytest.mark.skipif(os.name == "nt", reason="POSIX permissions not supported on Windows")
 class TestConfigPermissions:
     """Tests for config file permission checks."""
 

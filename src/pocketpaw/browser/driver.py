@@ -284,7 +284,6 @@ class BrowserDriver:
 
     async def screenshot(self, path: str | None = None) -> str:
         """Take a screenshot of the current page.
-
         Args:
             path: Path to save screenshot. If None, uses default timestamped name.
 
@@ -296,15 +295,11 @@ class BrowserDriver:
         if path is None:
             timestamp = datetime.now(tz=timezone.utc).strftime("%Y%m%d_%H%M%S")
             path = f"screenshot_{timestamp}.png"
+            await page.screenshot(path=path)
+            return path
 
-        # Ensure path is absolute
-        path_obj = Path(path)
-        if not path_obj.is_absolute():
-            path_obj = Path.cwd() / path_obj
-
-        await page.screenshot(path=str(path_obj))
-
-        return str(path_obj)
-
+    # If user provides a path, use it exactly as given
+        await page.screenshot(path=path)
+        return path
 
 __all__ = ["BrowserDriver", "NavigationResult"]

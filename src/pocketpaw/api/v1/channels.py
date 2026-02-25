@@ -1,5 +1,7 @@
 # Channels router — status, save, toggle + extras check/install.
 # Created: 2026-02-20
+# Updated: 2026-02-25 — Fix WhatsApp QR import path, revert install_extras to
+#   return error JSON (200) instead of HTTP 500 to avoid breaking dashboard JS.
 
 from __future__ import annotations
 
@@ -142,7 +144,7 @@ async def toggle_channel(request: Request):
 @router.get("/whatsapp/qr")
 async def get_whatsapp_qr():
     """Get current WhatsApp QR code for neonize pairing."""
-    from pocketpaw.dashboard_channels import _channel_adapters
+    from pocketpaw.dashboard_state import _channel_adapters
 
     adapter = _channel_adapters.get("whatsapp")
     if adapter is None or not hasattr(adapter, "_qr_data"):
@@ -190,7 +192,7 @@ async def install_extras(request: Request):
     try:
         await asyncio.to_thread(auto_install, extra_name, import_mod)
     except RuntimeError as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
+        return {"error": str(exc)}
 
     import importlib
     import sys

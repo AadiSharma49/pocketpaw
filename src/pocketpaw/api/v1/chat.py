@@ -1,5 +1,7 @@
 # Chat router — send, stream (SSE), stop.
 # Created: 2026-02-20
+# Updated: 2026-02-25 — Tighten SSE session filter: block events without session_key
+#   instead of silently passing them through to all clients.
 #
 # Enables external clients to send messages and receive responses via HTTP.
 # SSE streaming reuses the entire AgentLoop pipeline via _APISessionBridge.
@@ -69,8 +71,10 @@ class _APISessionBridge:
             data = evt.data or {}
             # Filter out events belonging to other sessions.
             # session_key format is "channel:chat_id" (see InboundMessage.session_key).
+            # Events without a session_key are dropped — they are global events
+            # (health, daemon) that don't belong in a chat SSE stream.
             sk = data.get("session_key", "")
-            if sk and not sk.endswith(f":{self.chat_id}"):
+            if not sk or not sk.endswith(f":{self.chat_id}"):
                 return
             if evt.event_type == "tool_start":
                 await self.queue.put(

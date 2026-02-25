@@ -254,8 +254,9 @@ Examples:
             loop = asyncio.new_event_loop()
             loop.run_until_complete(shutdown_all())
             loop.close()
-        except Exception:
-            # Event loop issues or cleanup errors — best-effort
+        except (RuntimeError, OSError):
+            # RuntimeError: event loop already closed (common on Windows)
+            # OSError: socket/fd cleanup errors during forced shutdown
             pass
 
 

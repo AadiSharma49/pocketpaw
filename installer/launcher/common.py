@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import platform
 import shutil
 import subprocess
@@ -53,8 +54,6 @@ def find_uv() -> str | None:
 
     # Check standard Windows uv install location (LOCALAPPDATA\uv\bin)
     if platform.system() == "Windows":
-        import os
-
         local_app = os.environ.get("LOCALAPPDATA", "")
         if local_app:
             win_uv = Path(local_app) / "uv" / "bin" / "uv.exe"

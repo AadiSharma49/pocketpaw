@@ -368,7 +368,7 @@ pip install pocketpaw[all]                 # Everything
 ## Join the Pack
 
 - Twitter: [@prakashd88](https://twitter.com/prakashd88)
-- Discord: Coming Soon
+- Discord: [dsc.gg/pocketpaw](https://dsc.gg/pocketpaw)
 - Email: pocketpawai@gmail.com
 
 PRs welcome. Come build with us.

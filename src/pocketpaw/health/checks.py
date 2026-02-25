@@ -11,8 +11,11 @@ import importlib.util
 import json
 import logging
 import re
+import stat
 from dataclasses import dataclass
 from datetime import UTC, datetime
+
+from pocketpaw.config import get_config_path
 
 logger = logging.getLogger(__name__)
 
@@ -114,21 +117,9 @@ def check_config_valid_json() -> HealthCheckResult:
 
 def check_config_permissions() -> HealthCheckResult:
     """Check config file permissions are 600."""
-    import sys
-
-    from pocketpaw.config import get_config_path
-
-    if sys.platform == "win32":
-        return HealthCheckResult(
-            check_id="config_permissions",
-            name="Config Permissions",
-            category="config",
-            status="ok",
-            message="Permission check skipped on Windows",
-            fix_hint="",
-        )
 
     path = get_config_path()
+
     if not path.exists():
         return HealthCheckResult(
             check_id="config_permissions",
@@ -139,25 +130,28 @@ def check_config_permissions() -> HealthCheckResult:
             fix_hint="",
         )
 
-    mode = path.stat().st_mode & 0o777
-    if mode <= 0o600:
+    # Extract permission bits
+    mode = path.stat().st_mode
+
+    # If group or others have ANY permissions → too open
+    if mode & (stat.S_IRWXG | stat.S_IRWXO):
         return HealthCheckResult(
             check_id="config_permissions",
             name="Config Permissions",
             category="config",
-            status="ok",
-            message=f"Config file permissions: {oct(mode)}",
-            fix_hint="",
+            status="warning",
+            message=f"Config file permissions too open: {oct(mode & 0o777)} (should be 600)",
+            fix_hint="Run: chmod 600 ~/.pocketpaw/config.json",
         )
+
     return HealthCheckResult(
         check_id="config_permissions",
         name="Config Permissions",
         category="config",
-        status="warning",
-        message=f"Config file permissions too open: {oct(mode)} (should be 600)",
-        fix_hint="Run: chmod 600 ~/.pocketpaw/config.json",
+        status="ok",
+        message=f"Config file permissions: {oct(mode & 0o777)}",
+        fix_hint="",
     )
-
 
 def check_api_key_primary() -> HealthCheckResult:
     """Check that an API key exists for the selected backend."""

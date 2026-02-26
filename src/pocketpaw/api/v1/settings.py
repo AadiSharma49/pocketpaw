@@ -43,10 +43,34 @@ async def get_settings():
 @router.put("/settings", dependencies=[Depends(require_scope("settings:write"))])
 async def update_settings(request: Request):
     """Update settings fields. Only provided fields are changed."""
-    from pocketpaw.config import Settings, get_settings
+    from pocketpaw.config import Settings, get_settings, validate_api_key
 
     data = await request.json()
     settings_data = data.get("settings", data)
+
+    # Validate API keys before saving
+    validation_errors = []
+    api_key_fields = [
+        "anthropic_api_key",
+        "openai_api_key",
+        "telegram_bot_token",
+    ]
+
+    for field in api_key_fields:
+        if field in settings_data:
+            value = settings_data[field]
+            if value:  # Only validate non-empty values
+                is_valid, warning = validate_api_key(field, value)
+                if not is_valid:
+                    validation_errors.append(warning)
+
+    if validation_errors:
+        from fastapi import HTTPException
+
+        raise HTTPException(
+            status_code=400,
+            detail={"errors": validation_errors}
+        )
 
     async with _settings_lock:
         settings = Settings.load()

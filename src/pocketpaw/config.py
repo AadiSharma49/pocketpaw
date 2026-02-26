@@ -12,6 +12,7 @@ Changes:
 
 import json
 import logging
+import re
 from functools import lru_cache
 from pathlib import Path
 
@@ -19,6 +20,55 @@ from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 logger = logging.getLogger(__name__)
+
+
+# API key validation patterns
+_API_KEY_PATTERNS = {
+    "anthropic_api_key": {
+        "pattern": re.compile(r"^sk-ant-"),
+        "example": "sk-ant-...",
+        "name": "Anthropic API key",
+    },
+    "openai_api_key": {
+        "pattern": re.compile(r"^sk-"),
+        "example": "sk-...",
+        "name": "OpenAI API key",
+    },
+    "telegram_bot_token": {
+        "pattern": re.compile(r"^\d+:AA[A-Za-z0-9_-]{30,}$"),
+        "example": "123456789:AAH...",
+        "name": "Telegram bot token",
+    },
+}
+
+
+def validate_api_key(field_name: str, value: str) -> tuple[bool, str]:
+    """Validate API key format.
+
+    Args:
+        field_name: Name of the field being validated (e.g., "anthropic_api_key")
+        value: The API key value to validate
+
+    Returns:
+        Tuple of (is_valid, warning_message). warning_message is empty if valid.
+    """
+    if not value or not value.strip():
+        return True, ""  # Empty values are allowed (user may want to unset)
+
+    value = value.strip()
+
+    validator = _API_KEY_PATTERNS.get(field_name)
+    if not validator:
+        return True, ""  # No validation rule for this field
+
+    if not validator["pattern"].match(value):
+        return False, (
+            f"{validator['name']} doesn't match expected format "
+            f"(expected format: {validator['example']}). "
+            f"Double-check for typos or truncation."
+        )
+
+    return True, ""
 
 
 def _chmod_safe(path: Path, mode: int) -> None:
